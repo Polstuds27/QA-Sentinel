@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Fetched by `npm run models` (too large for git)
+public/models
+public/ort

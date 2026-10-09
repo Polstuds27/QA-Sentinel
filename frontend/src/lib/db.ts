@@ -1,5 +1,6 @@
 import Dexie, { type Table } from "dexie";
 import type { Check } from "./scorecard";
+import type { Redaction } from "./pii";
 
 export interface CallRecord {
   id: string;
@@ -8,6 +9,10 @@ export interface CallRecord {
   scorecard: string;
   audioUrl?: string;
   fileName?: string;
+  languages?: string[];
+  engine?: string;
+  redactions?: Redaction[];
+  speakers?: "channels" | "voice" | "unknown";
   source: "demo" | "ai";
   coaching?: string;
   createdAt: number;
@@ -19,6 +24,7 @@ export interface TranscriptRow {
   time: string;
   speaker: string;
   text: string;
+  words?: Array<{ start: number; end: number; text: string }>;
 }
 
 export interface ResultRow {
@@ -41,6 +47,11 @@ export interface OverrideRow {
   decidedAt: number;
 }
 
+export interface AudioRow {
+  callId: string;
+  blob: Blob;
+}
+
 export interface ScorecardRow {
   id: string;
   name: string;
@@ -54,6 +65,7 @@ class QADb extends Dexie {
   results!: Table<ResultRow, number>;
   overrides!: Table<OverrideRow, number>;
   scorecards!: Table<ScorecardRow, string>;
+  audio!: Table<AudioRow, string>;
   constructor() {
     // Keeps its pre-rename name so calls already stored on a machine are not orphaned.
     super("qa-sentinel");
@@ -67,6 +79,13 @@ class QADb extends Dexie {
       results: "++id, callId, check_id",
       overrides: "++id, callId, check_id",
       scorecards: "id",
+    });
+    // v3: keep each uploaded recording next to its call so it still plays after a reload.
+    // It also adds the compound index the override lookups in store.ts query by.
+    this.version(3).stores({
+      audio: "callId",
+      results: "++id, callId, check_id, [callId+check_id]",
+      overrides: "++id, callId, check_id, [callId+check_id]",
     });
   }
 }

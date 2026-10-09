@@ -12,16 +12,25 @@ Submission due 10:00 AM Oct 10 — working product over slides.
 ## Layout
 
 - `frontend/` — Vite 8 + React 19 + TS + Tailwind v4 SPA. The app.
-- `frontend/src/App.tsx` — all 5 screens. `mock.ts` — 3 demo calls (clean, critical #147
+- `frontend/src/App.tsx` — all 5 screens. The scorecard editor can add, reword, retype
+  and remove checks (each with an optional "how to judge it" note that is sent to the
+  model); uploaded calls can be deleted from the Calls list or call detail, which also
+  removes the stored recording; a queue row shows a spinner and a progress line while it
+  is processed. `mock.ts` — 3 demo calls (clean, critical #147
   62/100 RED, borderline); transcripts and verdicts are hand-written, line times match
   the sample recordings.
 - `frontend/src/ai/` — working local pipeline: `whisper.ts` + `speech.worker.ts`
-  (Whisper base, Web Worker), `ollama.ts` (qwen2.5:3b scoring), `backend.ts`
+  (Whisper base and pyannote speaker separation, Web Worker), `ollama.ts` (qwen2.5:3b scoring), `backend.ts`
   (provider abstraction: Ollama live, WebLLM stubbed), `coaching.ts` (notes),
-  `pipeline.ts` (dispatcher, two-tier quote guard, deterministic critical override).
-  Behind the in-app Local AI toggle (`localStorage qa-ai-enabled`); OFF = mock data.
-- `frontend/src/lib/` — `scorecard.ts`, `pii.ts` (regex+Luhn+`findCardHits`),
-  `db.ts` (Dexie v2: calls, transcripts, results, overrides, scorecards),
+  `pipeline.ts` (dispatcher, two-tier quote guard, deterministic critical override). A
+  verdict that fails the quote guard is asked for once more, then left unscored as
+  "Needs manual review" instead of failing the whole call.
+  Behind the in-app Local AI toggle (`localStorage qa-ai-enabled`). OFF = the three
+  scripted sample calls plus any stored real calls; ON = stored real calls only.
+- `frontend/src/lib/` — `scorecard.ts`, `pii.ts` (`redactPII` + `findCardHits`: any run
+  of 13–19 digits is redacted and flagged even if Luhn fails, because Whisper mishears
+  digits; `valid` says whether the checksum matched),
+  `db.ts` (Dexie v3: calls, transcripts, results, overrides, scorecards, audio),
   `store.ts` (persistence service), `export.ts` (redacted CSV + PDF),
   `agents.ts` (per-agent stats).
 - `frontend/DESIGN.md` — the Gallery White design system (off-white wall, black type,
@@ -34,6 +43,10 @@ Submission due 10:00 AM Oct 10 — working product over slides.
 - `frontend/src/components/logo.tsx` — the Linya logo (an L with a cobalt dot, plus the
   wordmark). PNG exports and the favicon are in `frontend/public/` (`logo.png`,
   `logo-dark.png`, `logo-mark.png`, `favicon.svg`).
+- `frontend/src/components/transcript.tsx` — the transcript on call detail. It follows the
+  audio and shows the word being spoken in cobalt; clicking a word plays from it. Uses the
+  per-word times stored on each line (`words`); the scripted sample calls have none, so
+  theirs are estimated from the line times.
 - `frontend/src/components/audio-player.tsx` + `waveform.tsx` — custom player for call
   detail: hairline track, cobalt playhead, a tick at each flagged timestamp, and a canvas
   waveform decoded from the recording (agent channel above the line, customer below) that
@@ -61,10 +74,15 @@ Submission due 10:00 AM Oct 10 — working product over slides.
 The npm commands are the same in zsh, bash and PowerShell.
 
 ```sh
-cd frontend; npm install; npm run dev      # UI shell (mock data until AI toggle)
+cd frontend; npm install
+npm run models                             # once per machine: fetch speech models (needs internet)
+npm run dev                                # sample calls until the Local AI toggle is on
 npm run build                              # tsc -b + vite build (must pass)
 npm run lint                               # oxlint
+npm run whisper                            # optional: native Whisper large-v3-turbo (macOS, whisper.cpp)
 node scripts/phase1-e2e.mjs                # whole-piece E2E (needs dev + ollama up)
+npm run eval                               # scoring regression check (needs ollama up)
+npm run eval:redaction                     # redaction regression check (needs ollama up)
 ```
 
 `phase1-e2e.mjs` has a Windows Chrome path and profile directory hard-coded; change them
@@ -72,8 +90,61 @@ to run it on another machine.
 
 Ollama (required when the AI toggle is on): `ollama serve` must run with
 `OLLAMA_ORIGINS` including `http://localhost:5173` (on Windows set via `setx`, then
-restart the server). Models: `qwen2.5:3b` for scoring. Whisper base downloads from HF hub
-on first transcription (~150 MB, then cached).
+restart the server; recent Ollama versions allow `http://localhost:*` by default).
+Models: `qwen2.5:3b` for scoring.
+
+Speech to text has two engines; the pipeline picks per call and records which one ran
+(`engine` on the call, shown on call detail):
+
+- Native (preferred): `npm run whisper` starts whisper.cpp with Whisper large-v3-turbo on
+  `localhost:8178` (`scripts/native-whisper.mjs`, `src/ai/native-whisper.ts`). Needs
+  `brew install whisper-cpp`; the 1.6 GB model lives in `~/.linya/`, outside the repo.
+  Runs with `-dtw large.v3.turbo -nfa`: the app reads each word's end time from `t_dtw`,
+  because the service's ordinary word times stamp a sentence's first word in the silence
+  before it. Use the name `localhost`, not `127.0.0.1`, in the URL.
+- In browser (fallback when the service is not running): Whisper base, set in
+  `src/ai/models.ts`. Small is available but slow; medium does not fit in a tab
+  (8-bit build ran out of memory, `std::bad_alloc`).
+
+Measured Oct 9 on the M4 Pro Mac, sample calls, upload to scored call: turbo 7 to 9 s,
+base in browser 10 to 16 s, small in browser about 60 s. Turbo wrote the card number and
+"BankCo" correctly where base did not. The Intel laptop has no fast path for turbo: it
+stays on base in the browser.
+
+Offline by construction: the app makes no request to any machine but this one
+(`localhost:11434` for Ollama, `localhost:8178` for native Whisper, its own origin).
+`npm run models` puts Whisper base and pyannote segmentation 3.0 in `frontend/public/models/`
+and the ONNX WebAssembly runtime in `frontend/public/ort/` (both git-ignored, about 340 MB; one file
+is over GitHub's 100 MB limit). `speech.worker.ts` sets `allowRemoteModels = false`
+and points the runtime at `/ort/`; without that the library pulls it from cdn.jsdelivr.net.
+`localModelPath` must stay a relative path (a full URL makes the library skip tokenizers).
+`vite.config.ts` returns 404 for missing files under `/models` and `/ort`, because Vite's
+index.html fallback breaks the library's probing. Verified Oct 9: fresh browser profile,
+all non-localhost DNS blocked, stereo and mono calls both transcribed and scored.
+
+Language: the library assumes English when no language is given, so `speech.worker.ts`
+detects it the way Whisper does (one decoding step, highest language token) for each
+channel or voice, then transcribes in that language. The call shows what was detected
+("English", "Filipino", "Spanish + English"). Detection was right on English, Spanish,
+Tagalog and Japanese test clips (Oct 9). Everything after transcription is still tuned
+for English: the keyword lists in `ollama.ts` and `pipeline.ts`, and the eval set.
+Whisper base transcribes Tagalog poorly; a larger Whisper is the fix, not the prompt.
+
+Transcription is word by word (`whisper.ts`): both engines return a time for every word.
+A two-channel file only counts as stereo when the channels carry different audio
+(`channelsCarrySameAudio`): files saved from video sites or converted to MP3 hold one
+recording on both channels, and are mixed down and handled as mono.
+Stereo: the two channels are mixed and transcribed once, words "heard" over silence are
+dropped by loudness (`dropSilentWords`), and each phrase goes to the channel that is louder
+while it is said (`assignChannels`). Mono: the recording is transcribed once and each word goes to
+the voice pyannote says is speaking (`assignVoices`, voted per phrase so a sentence is not
+split between people), and a word cannot appear under both speakers; the voice that talks like an agent (phrase cues, else first to speak) is
+labelled Agent and the call is marked `speakers: "voice"`. If two voices are not found,
+lines stay "Unknown". Lines break on a speaker change, or a finished sentence followed by
+a pause. On mono, a card number that appears a second time also counts as a readback.
+Measured Oct 9 on the three sample calls, stereo and mono: every script word under the
+right speaker except spelling variants ("Bank Co" for "BankCo", "Ok" for "Okay"), no
+duplicated or invented words. Synthetic voices with no overlap: an easy case.
 
 ## Rules from the spec doc
 
@@ -88,7 +159,16 @@ Its navy/teal mockups are superseded by `frontend/DESIGN.md`; everything else st
 - Per-check LLM output matches `CheckResult` in `src/lib/scorecard.ts`: `check_id`,
   `verdict` (pass | fail | not_applicable), `severity`, `speaker`, `timestamp`, `evidence`,
   `reason`.
-- PII: deterministic regex + Luhn now; LLM name/address pass is not built. Exports must
+- PII: two layers, both applied by `redactPII` / `findHidden` in `lib/pii.ts`. Patterns:
+  card-length numbers, emails, phones, dates with a year, account IDs, any 6+ digit run, a
+  name after Mr/Ms/Mrs. Model pass (`ai/redaction.ts`): names, addresses and security
+  answers, stored on the call as `redactions`. The model only returns short strings; code
+  accepts one only if it is literally in the transcript and is not the agent's name, and
+  does the replacing itself. The agent's name and the company name stay visible.
+  `npm run eval:redaction` checks eight scripted calls (22 details hidden of 22, 17 of 17
+  kept, Oct 9). Scripted English; real names and addresses will slip through sometimes.
+- Prompts live in three files: `ai/ollama.ts` (scoring: `SYSTEM`, the per-check `PLANS`,
+  `customPlan`), `ai/redaction.ts` (`SYSTEM`), `ai/coaching.ts` (the coaching note). Exports must
   stay redacted (`[CARD •••• 1111]`, `[EMAIL]`, `[PHONE]`). A card number spoken by the
   agent is both a redaction span and a compliance flag.
 - Hard constraints: no cloud AI APIs, audio never leaves the machine, offline after first
@@ -107,9 +187,28 @@ abstraction (`backend.ts`); Dexie v2 persistence (calls, results, overrides,
 scorecards, coaching); redacted CSV + PDF export; coaching notes; agent dashboard.
 E2E proven (`phase1-e2e.mjs`): real 67 s clip transcribed and scored, card-readback
 flagged CRIT. Phase 0 ledger: Whisper PASS; WebLLM BLOCKED on Intel iGPU; Ollama 1.5B
-fast but wrong on criticals; Ollama 3B correct (~26 s cold). Still TODO (gated):
-stereo speaker split beyond channel mapping, model-weight cache pinning + Wi-Fi-off
-test, WebLLM revisit on stronger hardware. That E2E run was before the Gallery White
+fast but wrong on criticals; Ollama 3B correct (~26 s cold). On the Mac (Oct 9), real
+pipeline ran end to end in the browser on the M4 Pro Mac with `samples/call-147.m4a`:
+about 22 s to transcribe both channels, about 6 s to score all 7 checks, result 62/100 RED
+with both critical flags, the same as the spec scenario.
+
+Scoring design (`ollama.ts`): the model never returns a verdict. Each check is split into
+yes/no probes, each asked on its own over only the lines that can answer it (agent lines,
+customer lines, or the first/last agent line). The model replies `why`, then `answer`,
+then the number of the supporting line; code turns the answers into the verdict, the
+reason text and the evidence line. Order matters: asked to quote first, qwen2.5:3b returns
+an empty quote and argues "false". Card numbers and "does the call touch an account" are
+read by regex, not asked. Custom or reworded checks get one generic probe built from their
+wording and "how to judge it" note.
+
+`node scripts/eval-scoring.mjs` (needs `ollama serve`) replays 18 scripted transcripts
+with expected verdicts. Measured Oct 9 on the Mac: the first prompt scored 81% on the
+held-out set; the probe design scored 41/42 (98%) on six transcripts written after the
+prompt was frozen. That one miss led to a keyword backstop for identity questions, after
+which all 126 verdicts matched over two runs, but those sets are no longer unseen. These
+are scripted English transcripts, not real calls: never quote them as product accuracy.
+Change the prompt only with this script, and add new cases instead of fitting to old ones. Still TODO (gated):
+a full Wi-Fi-off rehearsal on the demo laptop, WebLLM revisit on stronger hardware. That E2E run was before the Gallery White
 restyle was merged in; re-run it once on the merged UI.
 
 The spec's original plan was WebLLM in the browser (Qwen2.5-3B-Instruct or

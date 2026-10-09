@@ -7,7 +7,11 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "models": "node scripts/fetch-models.mjs",
+    "eval": "node scripts/eval-scoring.mjs",
+    "whisper": "node scripts/native-whisper.mjs",
+    "eval:redaction": "node scripts/eval-redaction.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

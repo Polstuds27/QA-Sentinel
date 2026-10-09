@@ -9,6 +9,8 @@ export interface Check {
   kind: "must_do" | "must_not";
   weight: number;
   critical: boolean;
+  /** Optional plain-language note for the scoring model: what counts as pass or fail. */
+  guide?: string;
 }
 
 export interface CheckResult {

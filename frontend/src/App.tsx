@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { CheckIcon, MinusIcon, XIcon } from "lucide-react";
+import { CheckIcon, MinusIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,8 +8,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
 import { AudioPlayer } from "@/components/audio-player";
 import { Logo } from "@/components/logo";
+import { Transcript } from "@/components/transcript";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DEMO_CALLS, type DemoCall } from "./mock";
 import { isAIEnabled, runLocalPipeline, setAIEnabled, type PipelineProgress } from "./ai/pipeline";
@@ -17,7 +19,7 @@ import { getBackend } from "./ai/backend";
 import { generateCoachingNote } from "./ai/coaching";
 import { BANK_SUPPORT_V2, scoreCall, type CallStatus, type Check } from "./lib/scorecard";
 import { redactPII } from "./lib/pii";
-import { getCoaching, getScorecard, loadAICalls, saveAICall, saveCoaching, saveScorecard, setOverride } from "./lib/store";
+import { deleteAICall, getCoaching, getScorecard, loadAICalls, loadOverrides, saveAICall, saveCoaching, saveScorecard, setOverride } from "./lib/store";
 import { downloadCSV, exportPDF } from "./lib/export";
 import { agentStats } from "./lib/agents";
 
@@ -38,12 +40,35 @@ function toSeconds(ts: string): number {
   return m * 60 + s;
 }
 
+// Stands in when there is no call to show, so the detail screen can render its empty state.
+const NO_CALL: DemoCall = { id: "", agent: "", duration: "0:00", scorecard: "", lines: [], results: [] };
+
+// How far through the pipeline a queue row is, from its status text ("scoring: … 3/7 empathy").
+function queueProgress(status: string): number | null {
+  if (status.startsWith("decoding")) return 0.05;
+  if (status.startsWith("transcribing")) return 0.2;
+  if (status.startsWith("redacting")) return 0.45;
+  const step = status.match(/^scoring.*?(\d+)\/(\d+)/);
+  if (step) return 0.5 + (0.5 * (Number(step[1]) - 1)) / Number(step[2]);
+  return null;
+}
+
+const languageNames = new Intl.DisplayNames(["en"], { type: "language" });
+// "tl" → "Filipino". An unknown code is shown as it is.
+function languageLabel(codes: string[]): string {
+  return codes.map((code) => { try { return languageNames.of(code) ?? code; } catch { return code; } }).join(" + ");
+}
+
+const callName = (c: DemoCall) => c.name ?? `Call #${c.id}`;
+
 const STATUS_LABEL: Record<CallStatus, string> = { red: "Red", amber: "Amber", green: "Green" };
 
-// One accent only (DESIGN.md): status reads from the word and the weight of the
-// edge, not from a traffic-light hue. Red is the one error state.
+// Call status is shown in its own colour (green, amber, red) and always with the word,
+// so it does not rely on colour alone.
+const STATUS_TEXT: Record<CallStatus, string> = { red: "text-destructive", amber: "text-status-amber", green: "text-status-green" };
+
 function StatusBadge({ status, children }: { status: CallStatus; children: ReactNode }) {
-  const variant = status === "red" ? "destructive" : status === "amber" ? "strong" : "outline";
+  const variant = status === "red" ? "destructive" : status;
   return <Badge variant={variant}>{children}</Badge>;
 }
 
@@ -70,15 +95,35 @@ export default function App() {
   const [aiCalls, setAiCalls] = useState<DemoCall[]>([]);
   const [coaching, setCoaching] = useState<Record<string, string>>({});
   const [coachingBusy, setCoachingBusy] = useState(false);
+  // Analyst decisions per check, keyed "callId:checkId". Demo-call decisions last for the session.
+  // The scorecard being edited. Null means the saved scorecard is shown read-only.
+  const [draft, setDraft] = useState<Check[] | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [decisions, setDecisions] = useState<Record<string, "pass" | "fail">>({});
   const audioRef = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
     void loadAICalls().then(setAiCalls).catch(() => {});
     void getScorecard().then(setChecks).catch(() => {});
+    void loadOverrides().then((saved) => setDecisions((d) => ({ ...saved, ...d }))).catch(() => {});
   }, []);
 
-  const calls: DemoCall[] = useMemo(() => [...aiCalls, ...DEMO_CALLS], [aiCalls]);
-  const selected = calls.find((c) => c.id === selectedId) ?? calls[0];
+  const calls: DemoCall[] = useMemo(
+    () => [
+      ...aiCalls,
+      // The scripted sample calls are for demo mode only: with Local AI on, the app
+      // shows just the calls that were really transcribed and scored.
+      ...(aiOn ? [] : DEMO_CALLS).map((c) => ({
+        ...c,
+        results: c.results.map((r) => {
+          const decided = decisions[`${c.id}:${r.check_id}`];
+          return decided ? { ...r, verdict: decided } : r;
+        }),
+      })),
+    ],
+    [aiCalls, decisions, aiOn],
+  );
+  const selected = calls.find((c) => c.id === selectedId) ?? calls[0] ?? NO_CALL;
   const { score, status } = scoreCall(checks, selected.results);
 
   const visible = calls.filter((c) => {
@@ -126,16 +171,24 @@ export default function App() {
     const onStage = (p: PipelineProgress) => patchQueue(item.id, `${p.stage}: ${p.detail}`);
     try {
       onStage({ stage: "decoding", detail: "starting" });
-      const out = await runLocalPipeline(item.file, checks, onStage);
+      // A check that has no wording yet cannot be judged, so it is not sent to the model.
+      const out = await runLocalPipeline(item.file, checks.filter((c) => c.label.trim()), onStage);
       const call: DemoCall = {
-        id: `ai-${item.id}`,
+        // Unique across reloads, so a new upload never overwrites a stored call.
+        id: `ai-${Date.now().toString(36)}${item.id}`,
+        name: item.name,
+        audio: item.url,
+        speakers: out.speakers,
+        languages: out.languages,
+        engine: out.engine,
+        redactions: out.redactions,
         agent: "Uploaded call",
         duration: out.duration,
         scorecard: "Bank Support v2",
         lines: out.lines,
         results: out.results,
       };
-      await saveAICall(call);
+      await saveAICall(call, item.file);
       setAiCalls((cs) => [call, ...cs.filter((c) => c.id !== call.id)]);
       patchQueue(item.id, "done — open in Calls list below");
       setSelectedId(call.id);
@@ -145,7 +198,25 @@ export default function App() {
     }
   }
 
+  async function removeCall(callId: string) {
+    setPendingDelete(null);
+    try {
+      await deleteAICall(callId);
+      const gone = aiCalls.find((c) => c.id === callId);
+      if (gone?.audio) URL.revokeObjectURL(gone.audio);
+      setAiCalls((cs) => cs.filter((c) => c.id !== callId));
+      setDecisions((d) => Object.fromEntries(Object.entries(d).filter(([k]) => !k.startsWith(`${callId}:`))));
+    } catch (e) {
+      setAiError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function runAll() {
+    for (const item of queue.filter((q) => q.status === "ready").reverse()) await runAI(item);
+  }
+
   async function overrideVerdict(callId: string, checkId: string, verdict: "pass" | "fail") {
+    setDecisions((d) => ({ ...d, [`${callId}:${checkId}`]: verdict }));
     setAiCalls((cs) =>
       cs.map((c) =>
         c.id === callId
@@ -170,11 +241,16 @@ export default function App() {
       const labelOf = (id: string) => checks.find((c) => c.id === id)?.label ?? id;
       const failures = selected.results
         .filter((r) => r.verdict === "fail")
-        .map((r) => ({ label: labelOf(r.check_id), evidence: r.evidence, timestamp: r.timestamp }));
+        .map((r) => ({
+          label: labelOf(r.check_id),
+          kind: checks.find((c) => c.id === r.check_id)?.kind,
+          evidence: redactPII(r.evidence ?? "", selected.redactions),
+          timestamp: r.timestamp,
+        }));
       const strengths = selected.results
         .filter((r) => r.verdict === "pass")
         .map((r) => labelOf(r.check_id));
-      const note = await generateCoachingNote(selected.agent, failures, strengths);
+      const note = redactPII(await generateCoachingNote(selected.agent, failures, strengths), selected.redactions);
       setCoaching((m) => ({ ...m, [selected.id]: note }));
       if (selected.id.startsWith("ai-")) await saveCoaching(selected.id, note);
     } catch (e) {
@@ -191,6 +267,15 @@ export default function App() {
       const saved = await getCoaching(callId).catch(() => "");
       if (saved) setCoaching((m) => ({ ...m, [callId]: saved }));
     }
+  }
+
+  // Play the selected call's recording from an exact second.
+  function seekTo(seconds: number) {
+    const audio = audioRef.current;
+    if (!audio || !selected.audio) return;
+    if (audio.src !== new URL(selected.audio, location.href).href) audio.src = selected.audio;
+    audio.currentTime = seconds;
+    void audio.play().catch(() => {});
   }
 
   function seek(ts: string, url?: string) {
@@ -213,8 +298,11 @@ export default function App() {
     { id: "export", label: "Export" },
   ];
 
-  // A demo call plays its own recording; an analysed upload plays the file it came from.
-  const audioUrl = selected.audio ?? queue.find((q) => `ai-${q.id}` === selected.id)?.url ?? queue[0]?.url;
+  // A demo call plays its sample recording; an analysed upload plays the file it came from.
+  const audioUrl = selected.audio;
+  const isUpload = selected.id.startsWith("ai-");
+  const busy = queue.some((q) => queueProgress(q.status) !== null);
+  const readyCount = queue.filter((q) => q.status === "ready").length;
   const save = (next: Check[]) => { setChecks(next); void saveScorecard(next).catch(() => {}); };
   const stats = agentStats(calls, checks);
 
@@ -227,6 +315,17 @@ export default function App() {
     }));
 
   const total = checks.reduce((a, c) => a + c.weight, 0);
+  const draftTotal = (draft ?? []).reduce((a, c) => a + c.weight, 0);
+  // Why the draft cannot be saved yet, if anything.
+  const draftProblem = !draft
+    ? ""
+    : draft.length === 0
+      ? "Add at least one check."
+      : draft.some((c) => !c.label.trim())
+        ? "Every check needs wording. Fill it in or remove the empty check."
+        : draftTotal !== 100
+          ? `Weights add up to ${draftTotal}. They must total 100.`
+          : "";
 
   return (
     <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className="min-h-screen">
@@ -236,7 +335,7 @@ export default function App() {
             <Logo className="shrink-0" />
             <span className="label flex min-w-0 items-center gap-2 text-muted-foreground">
               <span aria-hidden className="size-2 shrink-0 rounded-full bg-foreground" />
-              <span className="truncate">{aiOn ? "Local AI on (Whisper + Ollama 3B)" : "Offline ready (UI shell — mock data)"}</span>
+              <span className="truncate">{aiOn ? "Local AI on (Whisper + Ollama 3B)" : "Local AI off — sample calls"}</span>
             </span>
             <label className="label flex shrink-0 cursor-pointer items-center gap-2">
               <input
@@ -272,21 +371,39 @@ export default function App() {
                 <input type="file" data-testid="upload" accept="audio/*,.mp3,.wav,.m4a" multiple className="absolute inset-0 cursor-pointer opacity-0" onChange={(e) => onFiles(e.target.files)} />
               </label>
               {aiError && <p role="alert" className="border border-destructive px-4 py-3 text-sm text-destructive">{aiError}</p>}
+              {aiOn && readyCount > 1 && (
+                <Button className="self-start" disabled={busy} onClick={() => void runAll()}>Transcribe &amp; score all ({readyCount})</Button>
+              )}
               {queue.length > 0 && (
                 <ul className="border-b border-border">
-                  {queue.map((q) => (
-                    <li key={q.id} className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-t border-border py-3 text-sm">
-                      <span className="min-w-0 font-medium break-words">{q.name}</span>
-                      <span className="flex items-center gap-4">
-                        <span data-testid={`queue-status-${q.id}`} className="text-muted-foreground">{q.status}</span>
-                        {aiOn && q.status === "ready" && (
-                          <Button size="sm" data-testid={`transcribe-${q.id}`} onClick={() => void runAI(q)}>
-                            Transcribe &amp; score
-                          </Button>
+                  {queue.map((q) => {
+                    const progress = queueProgress(q.status);
+                    return (
+                      <li key={q.id} className="relative flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-t border-border py-3 text-sm">
+                        <span className="min-w-0 font-medium break-words">{q.name}</span>
+                        <span className="flex items-center gap-3">
+                          {progress !== null && <Spinner className="text-primary" aria-label="Working" />}
+                          <span data-testid={`queue-status-${q.id}`} className={cn(progress !== null ? "text-foreground" : "text-muted-foreground")}>{q.status}</span>
+                          {aiOn && q.status === "ready" && (
+                            <Button size="sm" variant={readyCount > 1 ? "outline" : "default"} disabled={busy} data-testid={`transcribe-${q.id}`} onClick={() => void runAI(q)}>
+                              Transcribe &amp; score
+                            </Button>
+                          )}
+                        </span>
+                        {progress !== null && (
+                          <span
+                            role="progressbar"
+                            aria-label={`Processing ${q.name}`}
+                            aria-valuenow={Math.round(progress * 100)}
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            className="absolute inset-x-0 -bottom-px h-px origin-left bg-primary transition-transform duration-700 ease-out"
+                            style={{ transform: `scaleX(${progress})` }}
+                          />
                         )}
-                      </span>
-                    </li>
-                  ))}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>
@@ -304,8 +421,12 @@ export default function App() {
               {visible.length === 0 ? (
                 <Empty>
                   <EmptyHeader>
-                    <EmptyTitle>No red calls</EmptyTitle>
-                    <EmptyDescription>Nothing here scored below 70 or failed a critical check. Clear the filter to see every call.</EmptyDescription>
+                    <EmptyTitle>{calls.length === 0 ? "No calls yet" : "No red calls"}</EmptyTitle>
+                    <EmptyDescription>
+                      {calls.length === 0
+                        ? "Upload a recording above and press Transcribe & score. Untick Local AI to see the sample calls."
+                        : "Nothing here scored below 70 or failed a critical check. Clear the filter to see every call."}
+                    </EmptyDescription>
                   </EmptyHeader>
                 </Empty>
               ) : (
@@ -314,11 +435,11 @@ export default function App() {
                     const s = scoreCall(checks, c.results);
                     const flags = c.results.filter((r) => r.verdict === "fail").length;
                     return (
-                      <li key={c.id} className="border-t border-border">
+                      <li key={c.id} className="flex items-center gap-2 border-t border-border">
                         <button
                           data-testid={`call-${c.id}`}
                           onClick={() => void openCall(c.id)}
-                          className="group flex w-full flex-wrap items-center justify-between gap-x-6 gap-y-3 py-6 text-left"
+                          className="group flex min-w-0 flex-1 flex-wrap items-center justify-between gap-x-6 gap-y-3 py-6 text-left"
                         >
                           <span className="flex items-start gap-3">
                             <span
@@ -329,7 +450,7 @@ export default function App() {
                               )}
                             />
                             <span className="flex flex-col gap-1">
-                              <span className="text-xl font-medium tracking-tight">Call #{c.id}</span>
+                              <span className="text-xl font-medium tracking-tight break-all">{callName(c)}</span>
                               <span className="label text-muted-foreground">Agent: {c.agent} · {c.duration} · {c.scorecard}</span>
                             </span>
                           </span>
@@ -338,6 +459,17 @@ export default function App() {
                             <StatusBadge status={s.status}>{s.score} / 100 · {STATUS_LABEL[s.status]}</StatusBadge>
                           </span>
                         </button>
+                        {c.id.startsWith("ai-") &&
+                          (pendingDelete === c.id ? (
+                            <span className="flex shrink-0 items-center gap-1">
+                              <Button size="xs" variant="destructive" onClick={() => void removeCall(c.id)}>Delete</Button>
+                              <Button size="xs" variant="ghost" onClick={() => setPendingDelete(null)}>Cancel</Button>
+                            </span>
+                          ) : (
+                            <Button size="icon-sm" variant="ghost" aria-label={`Delete ${callName(c)}`} onClick={() => setPendingDelete(c.id)}>
+                              <Trash2Icon />
+                            </Button>
+                          ))}
                       </li>
                     );
                   })}
@@ -348,14 +480,23 @@ export default function App() {
         </TabsContent>
 
         <TabsContent value="detail" className={PANEL}>
+          {calls.length === 0 ? (
+            <Empty>
+              <EmptyHeader>
+                <EmptyTitle>No calls yet</EmptyTitle>
+                <EmptyDescription>Upload a recording on the Calls tab and press Transcribe &amp; score. Untick Local AI to see the sample calls.</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          ) : (
+          <>
           <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-6">
             <div className="flex flex-col gap-3">
-              <h2 className="display text-4xl sm:text-5xl">Call #{selected.id}</h2>
-              <p className="text-muted-foreground">Agent: {selected.agent} · {selected.duration} · {selected.scorecard}</p>
+              <h2 className={cn("display break-words", isUpload ? "text-3xl sm:text-4xl" : "text-4xl sm:text-5xl")}>{callName(selected)}</h2>
+              <p className="text-muted-foreground">Agent: {selected.agent} · {selected.duration} · {selected.scorecard}{selected.languages?.length ? ` · ${languageLabel(selected.languages)}` : ""}</p>
             </div>
             <div className="flex items-center gap-4">
               <p className="display text-4xl tabular-nums sm:text-5xl">
-                <span className={cn(status === "red" && "text-destructive")}>{score}</span>
+                <span className={STATUS_TEXT[status]}>{score}</span>
                 <span className="text-muted-foreground"> / 100</span>
               </p>
               <StatusBadge status={status}>{STATUS_LABEL[status]}</StatusBadge>
@@ -370,25 +511,26 @@ export default function App() {
               onMarkerClick={(m) => seek(m.ts, audioUrl)}
             />
           </div>
-          <p className="label mt-3 text-muted-foreground">{selected.audio ? "Sample recording with computer-generated voices; the transcript and scores are scripted." : "Transcribed and scored on this machine."} Click any timestamp or flag tick to play from there.</p>
+          <p className="label mt-3 text-muted-foreground">{isUpload ? `Transcribed${selected.engine ? ` with ${selected.engine}` : ""} and scored on this machine. The recording is stored in this browser only.` : "Sample recording with computer-generated voices; the transcript and scores are scripted."}{" "}
+            {selected.speakers === "voice" && "Mono recording: the two voices were told apart by sound, and which one is the agent was worked out from what they said, so check the speaker labels. "}
+            {selected.speakers === "unknown" && "The speakers could not be told apart, so the checks are less reliable. "} Click any timestamp or flag tick to play from there.</p>
           <div className="mt-16 grid gap-x-10 gap-y-16 lg:grid-cols-12">
             <div className="lg:col-span-7">
-              <h3 className="mb-5 text-xl font-medium tracking-tight">Transcript (PII redacted)</h3>
-              <ul className="border-b border-border">
-                {selected.lines.map((l, i) => (
-                  <li key={i} className="grid grid-cols-[3rem_4.5rem_1fr] items-baseline gap-x-3 border-t border-border py-3">
-                    <button className="label text-left text-muted-foreground underline underline-offset-4 transition-colors duration-200 hover:text-primary" onClick={() => seek(l.time, audioUrl)}>{l.time}</button>
-                    <span className="label">{l.speaker}</span>
-                    <span className="max-w-[60ch]">{redactPII(l.text)}</span>
-                  </li>
-                ))}
-              </ul>
+              <h3 className="mb-5 text-xl font-medium tracking-tight">Transcript</h3>
+              <Transcript
+                lines={selected.lines}
+                duration={toSeconds(selected.duration)}
+                redactions={selected.redactions}
+                audioRef={audioRef}
+                onSeek={seekTo}
+              />
             </div>
             <div className="lg:col-span-5">
               <h3 className="mb-5 text-xl font-medium tracking-tight">Scorecard</h3>
               <ul className="border-b border-border">
                 {checks.map((c) => {
                   const r = selected.results.find((x) => x.check_id === c.id);
+                  const decided = decisions[`${selected.id}:${c.id}`];
                   const verdict = VERDICTS[!r || r.verdict === "not_applicable" ? "na" : r.verdict === "pass" ? "pass" : c.critical ? "critical" : "fail"];
                   return (
                     <li key={c.id} className="flex flex-col gap-2 border-t border-border py-3 text-sm leading-relaxed">
@@ -400,7 +542,15 @@ export default function App() {
                         <span className="flex-1">{c.label} <span className="text-muted-foreground tabular-nums">({c.weight})</span></span>
                         {r?.timestamp && <span className="text-muted-foreground">{r.timestamp}</span>}
                       </div>
-                      {r && r.verdict === "fail" && (
+                      {r && r.verdict !== "pass" && (r.evidence || r.reason) && (
+                        <p className="label pl-23 text-muted-foreground">
+                          {r.evidence && <span className="text-foreground">“{redactPII(r.evidence, selected.redactions)}” </span>}
+                          {r.reason}
+                        </p>
+                      )}
+                      {decided ? (
+                        <p className="label pl-23 text-muted-foreground">Analyst {decided === "fail" ? "confirmed this flag" : "dismissed this flag"}</p>
+                      ) : r && r.verdict === "fail" && (
                         <div className="flex items-center gap-2 pl-23">
                           <span className="label text-muted-foreground">Analyst:</span>
                           <Button size="xs" variant="secondary" onClick={() => void overrideVerdict(selected.id, c.id, "fail")}>Confirm</Button>
@@ -414,6 +564,15 @@ export default function App() {
               <div className="mt-8 flex flex-wrap gap-2">
                 <Button onClick={() => exportCSV(selected)}>Export CSV</Button>
                 <Button variant="outline" onClick={() => exportPDF(selected, checks)}>Export PDF</Button>
+                {isUpload &&
+                  (pendingDelete === selected.id ? (
+                    <>
+                      <Button variant="destructive" onClick={() => { void removeCall(selected.id); setTab("calls"); }}>Delete this call and its recording</Button>
+                      <Button variant="ghost" onClick={() => setPendingDelete(null)}>Cancel</Button>
+                    </>
+                  ) : (
+                    <Button variant="ghost" onClick={() => setPendingDelete(selected.id)}>Delete call</Button>
+                  ))}
               </div>
               <div className="mt-12 flex flex-col items-start gap-4">
                 <h3 className="text-xl font-medium tracking-tight">Coaching note</h3>
@@ -428,35 +587,101 @@ export default function App() {
               </div>
             </div>
           </div>
+          </>
+          )}
         </TabsContent>
 
         <TabsContent value="scorecards" className={cn(PANEL, SECTION)}>
           <div className="flex flex-col gap-5 lg:col-span-5">
             <h2 className={HEADING}>4 · Scorecard editor — Bank Support v2</h2>
-            <p className="max-w-[48ch] text-muted-foreground">Preset from spec §08. Total must equal 100. Edits persist to IndexedDB.</p>
+            <p className="max-w-[48ch] text-muted-foreground">The rules every call is checked against. Weights must total 100. Changes are saved in this browser and apply to the next call you score.</p>
+            {draft ? (
+              <Button variant="outline" className="self-start" onClick={() => setDraft(BANK_SUPPORT_V2)}>Reset to preset</Button>
+            ) : (
+              <Button variant="outline" className="self-start" onClick={() => setDraft(checks)}>Edit scorecard</Button>
+            )}
           </div>
           <div className="lg:col-span-7">
-            <ul>
-              {checks.map((c) => (
-                <li key={c.id} className="flex flex-wrap items-center justify-between gap-x-8 gap-y-3 border-t border-border py-4">
-                  <span className="min-w-0 flex-1 basis-64 font-medium">{c.label}</span>
-                  <div className="flex items-center gap-6">
-                    <Field orientation="horizontal" className="w-auto">
-                      <FieldLabel htmlFor={`weight-${c.id}`}>Weight</FieldLabel>
-                      <Input id={`weight-${c.id}`} type="number" value={c.weight} min={0} max={100}
-                        onChange={(e) => save(checks.map((x) => x.id === c.id ? { ...x, weight: Number(e.target.value) } : x))}
-                        className="w-20" />
-                    </Field>
-                    <Field orientation="horizontal" className="w-auto">
-                      <Checkbox id={`critical-${c.id}`} checked={c.critical}
-                        onCheckedChange={(v) => save(checks.map((x) => x.id === c.id ? { ...x, critical: v } : x))} />
-                      <FieldLabel htmlFor={`critical-${c.id}`}>Critical</FieldLabel>
-                    </Field>
-                  </div>
-                </li>
-              ))}
-            </ul>
-            <p className={cn("border-t border-foreground pt-5 text-xl font-medium tracking-tight", total !== 100 && "text-destructive")}>Total: <span className="tabular-nums">{total} / 100</span></p>
+            {draft ? (
+              <>
+                <ul>
+                  {draft.map((c) => {
+                    const patch = (change: Partial<Check>) => setDraft(draft.map((x) => (x.id === c.id ? { ...x, ...change } : x)));
+                    return (
+                      <li key={c.id} className="flex flex-col gap-3 border-t border-border py-5">
+                        <div className="flex items-center gap-2">
+                          <Input aria-label="Check" value={c.label} placeholder="What the agent must or must not do" onChange={(e) => patch({ label: e.target.value })} className="font-medium" />
+                          <Button size="icon" variant="ghost" aria-label={`Remove check: ${c.label}`} onClick={() => setDraft(draft.filter((x) => x.id !== c.id))}>
+                            <XIcon />
+                          </Button>
+                        </div>
+                        <Input aria-label="How to judge it" value={c.guide ?? ""} placeholder="How to judge it (optional): what counts as a pass, what counts as a fail" onChange={(e) => patch({ guide: e.target.value })} />
+                        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+                          <Field orientation="horizontal" className="w-auto">
+                            <FieldLabel htmlFor={`kind-${c.id}`}>Type</FieldLabel>
+                            <select
+                              id={`kind-${c.id}`}
+                              value={c.kind}
+                              onChange={(e) => patch({ kind: e.target.value as Check["kind"] })}
+                              className="h-10 border border-input bg-background px-3 text-base transition-colors duration-200 hover:border-foreground md:text-sm"
+                            >
+                              <option value="must_do">Must do</option>
+                              <option value="must_not">Must not</option>
+                            </select>
+                          </Field>
+                          <Field orientation="horizontal" className="w-auto">
+                            <FieldLabel htmlFor={`weight-${c.id}`}>Weight</FieldLabel>
+                            <Input id={`weight-${c.id}`} type="number" value={c.weight} min={0} max={100} onChange={(e) => patch({ weight: Number(e.target.value) })} className="w-20 tabular-nums" />
+                          </Field>
+                          <Field orientation="horizontal" className="w-auto">
+                            <Checkbox id={`critical-${c.id}`} checked={c.critical} onCheckedChange={(v) => patch({ critical: v })} />
+                            <FieldLabel htmlFor={`critical-${c.id}`}>Critical</FieldLabel>
+                          </Field>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <div className="flex flex-wrap items-center justify-between gap-4 border-t border-foreground pt-5">
+                  <p className={cn("text-xl font-medium tracking-tight", draftProblem && "text-destructive")}>
+                    Total: <span className="tabular-nums">{draftTotal} / 100</span>
+                  </p>
+                  <Button
+                    variant="outline"
+                    onClick={() => setDraft([...draft, { id: `custom-${Date.now().toString(36)}`, label: "", kind: "must_do", weight: 0, critical: false }])}
+                  >
+                    <PlusIcon data-icon="inline-start" />
+                    Add check
+                  </Button>
+                </div>
+                <div className="mt-8 flex flex-wrap items-center gap-2">
+                  <Button disabled={!!draftProblem} onClick={() => { save(draft); setDraft(null); }}>Save changes</Button>
+                  <Button variant="ghost" onClick={() => setDraft(null)}>Cancel</Button>
+                  {draftProblem && <p role="status" className="label text-destructive">{draftProblem}</p>}
+                </div>
+              </>
+            ) : (
+              <>
+                <ul>
+                  {checks.map((c) => (
+                    <li key={c.id} className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2 border-t border-border py-4">
+                      <div className="flex min-w-0 flex-1 basis-72 flex-col gap-1">
+                        <span className="font-medium">{c.label}</span>
+                        {c.guide?.trim() && <span className="label text-muted-foreground">{c.guide}</span>}
+                      </div>
+                      <div className="flex items-center gap-4">
+                        {c.critical && <Badge variant="strong">Critical</Badge>}
+                        <span className="label text-muted-foreground">{c.kind === "must_do" ? "Must do" : "Must not"}</span>
+                        <span className="w-8 text-right font-medium tabular-nums">{c.weight}</span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                <p className={cn("border-t border-foreground pt-5 text-xl font-medium tracking-tight", total !== 100 && "text-destructive")}>
+                  Total: <span className="tabular-nums">{total} / 100</span>
+                </p>
+              </>
+            )}
           </div>
         </TabsContent>
 
@@ -509,10 +734,11 @@ export default function App() {
           <h2 className={cn(HEADING, "lg:col-span-5")}>6 · Export (redacted)</h2>
           <div className="flex flex-col gap-8 lg:col-span-7">
             <p className="max-w-[48ch] text-muted-foreground">Card numbers, emails and PH mobiles are redacted via regex + Luhn. Names/addresses LLM pass is AI-phase TODO.</p>
+            {calls.length === 0 && <p>No calls yet.</p>}
             <div className="flex flex-wrap gap-2">
               {calls.map((c) => (
                 <span key={c.id} className="flex gap-1">
-                  <Button variant="outline" onClick={() => exportCSV(c)}>Call #{c.id} CSV</Button>
+                  <Button variant="outline" onClick={() => exportCSV(c)}>{callName(c)} CSV</Button>
                   <Button variant="ghost" onClick={() => exportPDF(c, checks)}>PDF</Button>
                 </span>
               ))}

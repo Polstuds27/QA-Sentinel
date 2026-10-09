@@ -141,21 +141,21 @@ All colours are CSS variables on `:root` and `.dark`, exposed to Tailwind throug
 
 `--paper` `#ffffff`, `--ink` `#111111`, `--cobalt` `#1d3fd1`. These do **not** change in dark mode. Nothing uses them yet; they are reserved for exported reports and print, which keep their own colours.
 
-### Call status without traffic lights
+### Call status
 
-The spec scores calls green (85 and up), amber (70 to 84) and red (below 70, or any critical failure). The one-accent rule means those are not three hues. `StatusBadge` in `src/App.tsx` carries them like this:
+The spec scores calls green (85 and up), amber (70 to 84) and red (below 70, or any critical failure). Each status has its own colour, used for the status badge outline and text and for the score numeral on call detail:
 
-| Status | Badge variant | Looks like |
-|---|---|---|
-| Red | `destructive` | Destructive border and text |
-| Amber | `strong` | Foreground border and text |
-| Green | `outline` | Hairline border, muted text |
+| Status | Token | Light | Dark |
+|---|---|---|---|
+| Green | `--status-green` | `#1a7f37` | `#56d364` |
+| Amber | `--status-amber` | `#a15c00` | `#f0a13a` |
+| Red | `--destructive` | `#b3261e` | `#ff8a80` |
 
-The status word is always written next to the score ("71 / 100 · Amber"), because the outline weight alone is not enough to tell amber from green. Check verdicts follow the same idea: an icon and a word (Pass, Fail, Critical, N/A), with only Fail and Critical in the destructive colour.
+The status word is always written next to the score ("71 / 100 · Amber"), so the meaning never rests on colour alone. Badges are outlined, not filled. These colours are for call status only. Check verdicts stay as they were: an icon and a word (Pass, Fail, Critical, N/A), with only Fail and Critical in the destructive colour.
 
 ### Named Rules
 
-- **One accent.** Cobalt is the only colour. Do not add a second hue for status, variety, or decoration.
+- **One accent.** Cobalt is the only accent. Do not add a hue for variety or decoration. Two exceptions carry meaning: the call status colours (see Call status), and `--customer`, the yellow for the word a customer is speaking in a transcript (see Transcript).
 - **Cobalt means something.** It marks the action or the selection. It is never a background wash or a border on something inert.
 - **Destructive is for something wrong:** a red call, a failed check, an invalid input. Never decoration.
 - **Supporting text is `text-muted-foreground`**, never a lowered opacity on the wall.
@@ -222,7 +222,7 @@ shadcn/ui components (Base UI, `base-nova`) live in `src/components/ui/` and hav
 
 ### Badges
 
-`Badge` is a 1.5rem pill, `text-xs font-medium`, with tabular numerals. Variants: `default` (cobalt fill), `secondary` (`bg-muted`), `outline`, `strong` and `destructive`. The last three carry call status, as above.
+`Badge` is a 1.5rem pill, `text-xs font-medium`, with tabular numerals. Variants: `default` (cobalt fill), `secondary` (`bg-muted`), `outline`, `strong`, and the status outlines `green`, `amber` and `destructive`.
 
 ### Form controls
 
@@ -245,10 +245,22 @@ shadcn/ui components (Base UI, `base-nova`) live in `src/components/ui/` and hav
 - **Controls:** an outline icon button for play and pause, a ghost icon button for mute, and the current time and duration as `label` text. Below `sm` the waveform takes the full width and the controls sit in a row beneath it.
 - **No recording yet:** the controls are disabled and the dot turns muted, but the line still shows the call's length and where its flags are.
 
+### Transcript
+
+`Transcript` in `src/components/transcript.tsx`: hairline rows of timestamp, speaker and text.
+
+- **Text:** every line is foreground, whoever is speaking.
+- **Spoken word:** while the recording plays, the word being spoken changes colour, karaoke style, and the colour says who is talking: cobalt (`text-primary`) on an agent line, yellow (`text-customer`, token `--customer`: `#8a6100` light, `#f2c94c` dark) on a customer line. The speaker label of that line takes the same colour. A line with no known speaker highlights in cobalt.
+- **Why a second colour:** this is the one place it is allowed, because seeing who is talking at a glance is the point of the screen. `--customer` is for the customer's spoken word in a transcript and nothing else.
+- **Interaction:** a word takes its speaker's colour on hover and plays from that point when clicked.
+- **Hidden details** appear in place as bracketed labels such as `[NAME]` and `[CARD •••• 1111]`.
+
 ### Call rows and the drop zone
 
 - **Call row** (in `src/App.tsx`): a `size-2` dot, the call number as the row title, and a `label` line of agent, duration and scorecard beneath; flag count and status badge on the right. The dot is hollow by default and cobalt when that call is the one open in call detail, or on hover.
 - **Drop zone:** a square dashed frame at least 12rem tall. The edge darkens on hover and keyboard focus. The file input covers it invisibly, so both click and drop work.
+- **Processing row:** while a recording is transcribed and scored, its queue row shows a cobalt `Spinner`, the stage in foreground text, and a 1px cobalt line along the bottom edge that grows with each stage. Cobalt here marks the item being worked on.
+- **Delete:** a ghost trash icon beside an uploaded call. It asks first: the icon is replaced by a `destructive` Delete button and a ghost Cancel.
 - **Empty state:** `Empty` with a title and one line saying how to get results back. No border.
 
 ## Do's and Don'ts
@@ -265,7 +277,7 @@ shadcn/ui components (Base UI, `base-nova`) live in `src/components/ui/` and hav
 ### Don't:
 
 - Add shadows, gradients, blur, or glass.
-- Add a second accent colour, including green and amber for status.
+- Add a second accent colour. The status colours and the customer yellow are for those two jobs only.
 - Round the corners of inputs, panels, or images.
 - Use all-caps or a monospace face for labels, timestamps or verdicts.
 - Wrap ordinary content in cards.

@@ -20,17 +20,29 @@ Needs Node 20 or newer. The commands are the same in PowerShell, bash and zsh.
 ```sh
 cd frontend
 npm install
+npm run models  # once per machine: downloads the speech models (about 300 MB, needs internet)
 npm run dev     # toggle Local AI on in the header (needs ollama serve below)
 npm run build   # tsc + vite build
 npm run lint    # oxlint
+npm run whisper # optional, macOS: native Whisper large-v3-turbo (faster and more accurate)
 node scripts/phase1-e2e.mjs  # full upload→transcribe→score browser test
+npm run eval    # checks the scoring prompt against 18 scripted calls (needs ollama)
 ```
 
 Ollama prerequisite: `ollama serve` with `OLLAMA_ORIGINS` including
 `http://localhost:5173`, model `qwen2.5:3b` pulled. On Windows, `../setup-local.ps1`
 sets this up.
 
+Speech to text runs one of two ways. If `npm run whisper` is running (needs
+`brew install whisper-cpp`; downloads a 1.6 GB model to `~/.linya/` the first time), calls
+are transcribed by Whisper large-v3-turbo on this machine's GPU. If it is not, they are
+transcribed by Whisper base inside the browser. The call screen says which one was used.
+
 With Local AI off, the app shows three scripted demo calls.
+
+After `npm install`, `npm run models` and `ollama pull qwen2.5:3b`, the app needs no
+internet at all: the speech models and their runtime are served from `public/`, and
+scoring talks only to Ollama on this machine.
 
 ## What's implemented
 
@@ -46,10 +58,11 @@ With Local AI off, the app shows three scripted demo calls.
 - `src/ai/` — the local pipeline: Whisper worker, Ollama scoring, quote guard, coaching notes.
 - `src/lib/scorecard.ts` — Bank Support v2 preset, `scoreCall` (green ≥85, amber 70–84,
   red <70, any critical fail forces red; N/A checks excluded and scaled)
-- `src/lib/pii.ts` — deterministic redaction (card regex + Luhn, email, PH mobile).
-  The LLM name/address pass is not built.
+- `src/lib/pii.ts` + `src/ai/redaction.ts` — redaction. Patterns hide card numbers, emails,
+  phones, dates of birth, account IDs and other long numbers; the local model finds names,
+  addresses and security answers. The agent's name and the company name stay visible.
 - `src/lib/db.ts`, `store.ts` — Dexie schema and persistence (calls, transcripts, results,
-  overrides, scorecards).
+  overrides, scorecards, and each uploaded recording, all in this browser only).
 
 Do not add cloud AI APIs — the spec forbids audio upload.
 
@@ -60,9 +73,9 @@ The hackathon form asks for these. Keep only what is true of the code at the dea
 | Field | Status today |
 |---|---|
 | What runs locally | Speech-to-text (Whisper base in the browser), check scoring and coaching notes (Ollama on localhost), PII redaction (regex + Luhn), storage, CSV and PDF export, all UI. |
-| What requires internet | First load of the app, the one-time Whisper download (~150 MB), and pulling the Ollama model. No cloud AI APIs. |
-| Models used | Whisper base (ONNX, via Transformers.js); qwen2.5:3b via Ollama. WebLLM was tried and is blocked on the test hardware, so do not list it as used. |
-| Technologies and frameworks | React, Vite, TypeScript, Tailwind, shadcn/ui, Base UI, Transformers.js, Ollama, Dexie, Recharts, jsPDF. |
+| What requires internet | Setup only: `npm install`, `npm run models` (speech models, about 300 MB), the first `npm run whisper` (1.6 GB) and `ollama pull`. Running the app needs none; it makes no request to any other machine. No cloud AI APIs. |
+| Models used | Whisper large-v3-turbo (via whisper.cpp, when `npm run whisper` is running) or Whisper base (ONNX, via Transformers.js, in the browser); pyannote segmentation 3.0 (ONNX, speaker separation on mono recordings); qwen2.5:3b via Ollama. WebLLM was tried and is blocked on the test hardware, so do not list it as used. |
+| Technologies and frameworks | React, Vite, TypeScript, Tailwind, shadcn/ui, Base UI, Transformers.js, whisper.cpp, Ollama, Dexie, Recharts, jsPDF. |
 | APIs and cloud services | None. |
 | Existing code and assets | Open-source libraries above; the Vite React template; shadcn/ui component source. Sample call audio generated during the hackathon with text-to-speech. |
 | AI development tools | Claude Code. Confirm with the team and add every other tool used (the backend test scripts suggest opencode). |

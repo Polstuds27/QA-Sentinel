@@ -9,6 +9,8 @@ export interface TranscriptChunk {
   end: number; // seconds
   speaker: "agent" | "customer" | "unknown"; // unknown = mono fallback, split is Phase 3
   text: string;
+  /** The words of `text`, each with its own time. `text` is these joined by single spaces. */
+  words?: Array<{ start: number; end: number; text: string }>;
 }
 
 export interface PipelineJob {

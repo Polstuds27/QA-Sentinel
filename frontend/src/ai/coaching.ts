@@ -4,7 +4,7 @@ import { OLLAMA_URL, SCORING_MODEL } from "../ai/ollama";
 
 export async function generateCoachingNote(
   agent: string,
-  failures: Array<{ label: string; evidence?: string; timestamp?: string }>,
+  failures: Array<{ label: string; kind?: "must_do" | "must_not"; evidence?: string; timestamp?: string }>,
   strengths: string[],
 ): Promise<string> {
   const res = await fetch(`${OLLAMA_URL}/api/chat`, {
@@ -25,9 +25,22 @@ export async function generateCoachingNote(
         {
           role: "user",
           content:
-            `Agent: ${agent}\n` +
-            `Strengths: ${strengths.length ? strengths.join("; ") : "none recorded"}\n` +
-            `Misses: ${failures.map((f) => `${f.label} (${f.timestamp ?? "no timestamp"}): ${f.evidence ?? "no quote"}`).join("; ")}`,
+            `Write the coaching note for ${agent === "Uploaded call" ? "this agent" : agent} now.\n\n` +
+            `What went well:\n${strengths.length ? strengths.map((s) => `- ${s}`).join("\n") : "- nothing recorded"}\n\n` +
+            `What went wrong:\n${
+              failures.length
+                ? failures
+                    .map(
+                      (f) =>
+                        // Spell out which way the rule was missed: a "Never…" label alone gets read backwards.
+                        `- ${f.kind === "must_not" ? `Broke the rule "${f.label}" by doing exactly that` : `Skipped a required step: ${f.label}`}` +
+                        `${f.timestamp ? ` (at ${f.timestamp})` : ""}${f.evidence ? `. The agent said "${f.evidence}"` : ""}`,
+                    )
+                    .join("\n")
+                : "- nothing; every check passed"
+            }\n\n` +
+            "Reply with the note only: 2 to 3 sentences addressed to the agent as 'you'. Do not repeat these lists. " +
+            "Never tell the agent to do something a rule forbids.",
         },
       ],
     }),

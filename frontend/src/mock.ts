@@ -1,9 +1,12 @@
 import { BANK_SUPPORT_V2, scoreCall, type CheckResult } from "./lib/scorecard";
+import type { Redaction } from "./lib/pii";
 
 export interface TranscriptLine {
   time: string;
   speaker: string;
   text: string;
+  /** Each word's start and end in seconds. Present on transcribed calls; `text` is these joined by spaces. */
+  words?: Array<{ start: number; end: number; text: string }>;
 }
 
 export interface DemoCall {
@@ -11,6 +14,16 @@ export interface DemoCall {
   agent: string;
   duration: string;
   scorecard: string;
+  /** Display name for an uploaded call (its file name). Demo calls show "Call #id". */
+  name?: string;
+  /** Customer details found by the local model, hidden wherever they appear. */
+  redactions?: Redaction[];
+  /** Which Whisper transcribed an uploaded call. */
+  engine?: string;
+  /** Languages detected in an uploaded call, as codes ("en", "tl"). */
+  languages?: string[];
+  /** How an uploaded call's speakers were told apart. See SpeakerSource in ai/pipeline.ts. */
+  speakers?: "channels" | "voice" | "unknown";
   /** Recording in public/samples/, built by scripts/make_sample_calls.py. */
   audio?: string;
   lines: TranscriptLine[];

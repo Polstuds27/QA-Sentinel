@@ -29,6 +29,9 @@
   --color-paper: var(--paper);
   --color-ink: var(--ink);
   --color-cobalt: var(--cobalt);
+  --color-customer: var(--customer);
+  --color-status-green: var(--status-green);
+  --color-status-amber: var(--status-amber);
   --radius-sm: var(--radius);
   --radius-md: var(--radius);
   --radius-lg: var(--radius);
@@ -68,6 +71,11 @@
   --border: #dcdcd8;
   --input: var(--border);
   --ring: var(--primary);
+  /* The word being spoken in a transcript while the customer talks. The agent's uses --primary. */
+  --customer: #8a6100;
+  /* Call status. Red is --destructive. */
+  --status-green: #1a7f37;
+  --status-amber: #a15c00;
   --radius: 0;
   /* Fixed inks: these do not change in dark mode. */
   --paper: #ffffff;
@@ -86,6 +94,9 @@
   --muted: #1a1a19;
   --muted-foreground: #a5a5a0;
   --destructive: #ff8a80;
+  --customer: #f2c94c;
+  --status-green: #56d364;
+  --status-amber: #f0a13a;
   --border: #2c2c2a;
 }
 

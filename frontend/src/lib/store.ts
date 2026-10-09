@@ -8,8 +8,10 @@ import type { DemoCall } from "../mock";
 
 export const SCORECARD_ID = "bank-support-v2";
 
-export async function saveAICall(call: DemoCall): Promise<void> {
-  await db.transaction("rw", db.calls, db.transcripts, db.results, async () => {
+// `recording` is the uploaded file. It is stored in this browser only, never sent anywhere.
+export async function saveAICall(call: DemoCall, recording?: Blob): Promise<void> {
+  await db.transaction("rw", db.calls, db.transcripts, db.results, db.audio, async () => {
+    if (recording) await db.audio.put({ callId: call.id, blob: recording });
     await db.transcripts.where("callId").equals(call.id).delete();
     await db.results.where("callId").equals(call.id).delete();
     await db.calls.put({
@@ -17,11 +19,16 @@ export async function saveAICall(call: DemoCall): Promise<void> {
       agent: call.agent,
       duration: call.duration,
       scorecard: call.scorecard,
+      fileName: call.name,
+      speakers: call.speakers,
+      languages: call.languages,
+      engine: call.engine,
+      redactions: call.redactions,
       source: "ai",
       createdAt: Date.now(),
     });
     await db.transcripts.bulkAdd(
-      call.lines.map((l) => ({ callId: call.id, time: l.time, speaker: l.speaker, text: l.text })),
+      call.lines.map((l) => ({ callId: call.id, time: l.time, speaker: l.speaker, text: l.text, words: l.words })),
     );
     await db.results.bulkAdd(
       call.results.map((r) => ({
@@ -45,12 +52,19 @@ export async function loadAICalls(): Promise<DemoCall[]> {
   for (const rec of recs) {
     const lines = await db.transcripts.where("callId").equals(rec.id).sortBy("id");
     const rows = await db.results.where("callId").equals(rec.id).sortBy("id");
+    const recording = await db.audio.get(rec.id);
     calls.push({
       id: rec.id,
       agent: rec.agent,
       duration: rec.duration,
       scorecard: rec.scorecard,
-      lines: lines.map((l) => ({ time: l.time, speaker: l.speaker, text: l.text })),
+      name: rec.fileName,
+      speakers: rec.speakers,
+      languages: rec.languages,
+      engine: rec.engine,
+      redactions: rec.redactions,
+      audio: recording ? URL.createObjectURL(recording.blob) : undefined,
+      lines: lines.map((l) => ({ time: l.time, speaker: l.speaker, text: l.text, words: l.words })),
       results: rows.map((r) => ({
         check_id: r.check_id,
         verdict: r.verdict as "pass" | "fail" | "not_applicable",
@@ -65,6 +79,17 @@ export async function loadAICalls(): Promise<DemoCall[]> {
   return calls;
 }
 
+// Removes an uploaded call and everything stored with it, including the recording.
+export async function deleteAICall(callId: string): Promise<void> {
+  await db.transaction("rw", [db.calls, db.transcripts, db.results, db.overrides, db.audio], async () => {
+    await db.calls.delete(callId);
+    await db.transcripts.where("callId").equals(callId).delete();
+    await db.results.where("callId").equals(callId).delete();
+    await db.overrides.where("callId").equals(callId).delete();
+    await db.audio.delete(callId);
+  });
+}
+
 // Analyst confirm/dismiss: upserts the override and rewrites the stored verdict.
 export async function setOverride(callId: string, checkId: string, verdict: "pass" | "fail"): Promise<void> {
   await db.transaction("rw", db.results, db.overrides, async () => {
@@ -73,6 +98,12 @@ export async function setOverride(callId: string, checkId: string, verdict: "pas
     const row = await db.results.where("[callId+check_id]").equals([callId, checkId]).first();
     if (row?.id !== undefined) await db.results.update(row.id, { verdict });
   });
+}
+
+// Latest analyst decision per check, keyed "callId:checkId".
+export async function loadOverrides(): Promise<Record<string, "pass" | "fail">> {
+  const rows = await db.overrides.orderBy("id").toArray();
+  return Object.fromEntries(rows.map((r) => [`${r.callId}:${r.check_id}`, r.verdict as "pass" | "fail"]));
 }
 
 export async function getScorecard(): Promise<Check[]> {

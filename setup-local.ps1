@@ -54,8 +54,11 @@ Ok "qwen2.5:3b ready"
 Step "5/5 Frontend dependencies"
 Push-Location (Join-Path $root "frontend")
 npm install
-Pop-Location
 Ok "npm install done"
+Write-Host "Downloading the speech models into frontend/public/models (about 300 MB, one time)..."
+npm run models
+Pop-Location
+Ok "speech models installed - the app now runs with no internet"
 
 Write-Host "`nAll set. Run the app:" -ForegroundColor Cyan
 Write-Host "  1. ollama serve   (keep this terminal open; or leave the Ollama tray app running)"

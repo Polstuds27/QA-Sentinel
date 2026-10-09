@@ -9,8 +9,9 @@ Tick a box by changing `[ ]` to `[x]`. Items are in the order to do them.
 ## A. Get both machines on the same code
 
 1. [ ] **Mac:** update the working branch: `git checkout feature/test-ui`, then `git merge main`.
-2. [ ] **Windows:** `git pull` on `main`, then `npm install` inside `frontend/`. The merge
-   added new packages (shadcn/ui, Base UI, the font), so the app will not start without it.
+2. [ ] **Windows:** `git pull` on `main`, then `npm install` and `npm run models` inside
+   `frontend/`. The app no longer downloads Whisper by itself: without `npm run models`
+   transcription fails with "Speech models are not installed".
 3. [ ] **Both:** `npm run build` and `npm run lint` pass in `frontend/`.
 
 ## B. Prove the merged app works
@@ -32,8 +33,19 @@ The AI pipeline and the new UI were merged on Oct 9. The pipeline has not been r
 8. [ ] Open an exported CSV and PDF and confirm the card number shows as
    `[CARD •••• 1111]`, never in full.
 9. [ ] Look at the app at phone width and in dark mode (it follows the system setting).
-10. [ ] **Mac only, optional:** to run the pipeline on the Mac, install Ollama, pull
-    `qwen2.5:3b`, and start it with `OLLAMA_ORIGINS=http://localhost:5173 ollama serve`.
+10. [ ] **Mac:** run the real pipeline once. Whisper already works here; Ollama is not
+    installed yet.
+    1. `brew install ollama` (or download from ollama.com)
+    2. `ollama pull qwen2.5:3b` (about 2 GB)
+    3. Quit the Ollama menu-bar app if it is running, then start the server with
+       `OLLAMA_ORIGINS=http://localhost:5173 ollama serve` and leave it open
+    4. In another terminal: `cd frontend && npm run dev`, open http://localhost:5173
+    5. Tick **Local AI** in the header, go to Calls, upload
+       `frontend/public/samples/call-147.m4a`, press **Transcribe & score**
+    6. Expect: the card numbers show as `[CARD •••• 1111]`, "Never reads back a full card
+       number" is Critical at about 00:14, and the call is still there with its audio
+       after a page reload
+
     `setup-local.ps1` is Windows-only, and `phase1-e2e.mjs` has a Windows Chrome path
     hard-coded.
 
@@ -43,8 +55,11 @@ Measured speeds on the Windows laptop: about 40 seconds to transcribe a 67-secon
 then 20 to 30 seconds per check, and there are 7 checks. One call takes a few minutes.
 
 11. [ ] Decide which laptop is the demo laptop and do every item in this section on it.
-12. [ ] Download and cache the models while online: run one full transcribe-and-score so
-    Whisper (about 150 MB) is cached, and confirm `qwen2.5:3b` is pulled.
+12. [ ] While online, run `npm run models` in `frontend/` and confirm `qwen2.5:3b` is
+    pulled. That is everything the app needs from the internet.
+    On the Mac, also run `npm run whisper` once while online (it downloads 1.6 GB) and
+    start it before the demo, next to `ollama serve`. If it is not running the app still
+    works, on the slower in-browser Whisper.
 13. [ ] **Airplane-mode rehearsal.** Turn Wi-Fi off and run the whole flow. The pitch
     depends on this and it has not been done end to end yet.
 14. [ ] Process the demo calls ahead of time so their results are already in the Calls

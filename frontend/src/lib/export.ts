@@ -15,7 +15,7 @@ export function callToCSV(call: DemoCall): string {
         r.check_id,
         r.verdict,
         r.timestamp ?? "",
-        `"${redactPII(r.evidence ?? "").replace(/"/g, "'")}"`,
+        `"${redactPII(r.evidence ?? "", call.redactions).replace(/"/g, "'")}"`,
       ].join(","),
     ),
   ];
@@ -36,7 +36,7 @@ export function exportPDF(call: DemoCall, checks: Check[]): void {
   const doc = new jsPDF();
   let y = 18;
   doc.setFontSize(16);
-  doc.text(`QA Sentinel — Call #${call.id} (REDACTED)`, 14, y);
+  doc.text(`Linya — ${call.name ?? `Call #${call.id}`} (REDACTED)`, 14, y);
   y += 8;
   doc.setFontSize(11);
   doc.text(`Agent: ${call.agent}  Duration: ${call.duration}  Scorecard: ${call.scorecard}`, 14, y);
@@ -53,7 +53,7 @@ export function exportPDF(call: DemoCall, checks: Check[]): void {
     doc.text(`[${badge}] ${c.label} (${c.weight})`, 14, y);
     y += 6;
     if (r?.evidence) {
-      for (const line of doc.splitTextToSize(`   "${redactPII(r.evidence)}"`, 175) as string[]) {
+      for (const line of doc.splitTextToSize(`   "${redactPII(r.evidence, call.redactions)}"`, 175) as string[]) {
         doc.text(line, 14, y);
         y += 5;
       }
@@ -69,7 +69,7 @@ export function exportPDF(call: DemoCall, checks: Check[]): void {
   y += 7;
   doc.setFontSize(10);
   for (const l of call.lines) {
-    for (const line of doc.splitTextToSize(`[${l.time}] ${l.speaker}: ${redactPII(l.text)}`, 175) as string[]) {
+    for (const line of doc.splitTextToSize(`[${l.time}] ${l.speaker}: ${redactPII(l.text, call.redactions)}`, 175) as string[]) {
       doc.text(line, 14, y);
       y += 5;
       if (y > 280) {

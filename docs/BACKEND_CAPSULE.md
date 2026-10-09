@@ -85,11 +85,13 @@ hit **Transcribe & score**.
 
 ## 4. Contracts your code must honor
 
-- **LLM verdict JSON:** `{check_id, verdict: pass|fail|not_applicable, timestamp: mm:ss|"", evidence, reason}`. `check_id` copied exactly; `evidence` word-for-word from the transcript.
-- **Quote guard** (`quoteExists`): normalized substring, else ≥80% ordered-word fuzzy (Whisper writes "bank code" for "BankCo"). Reject = throw, analyst sees the error.
+- **LLM output:** the model is not asked for a verdict. `ollama.ts` asks yes/no probes one at a time and gets `{why, answer, line}` back (schema-enforced; `line` is the number of a transcript line it was shown). Code maps the answers to `{check_id, verdict: pass|fail|not_applicable, timestamp, evidence, reason}`. Evidence is always a real transcript line. Measure prompt changes with `node scripts/eval-scoring.mjs`.
+- **Quote guard** (`quoteExists`): normalized substring, else ≥80% ordered-word fuzzy (Whisper writes "bank code" for "BankCo"). A rejected or unparseable verdict is asked for once more; if it fails again the check is stored as `not_applicable` with reason "Needs manual review" and the rest of the call still completes. Only a backend that is down stops the run.
+- **Card detection:** any run of 13–19 digits (spaces, commas, dots or dashes between) counts, whether or not Luhn passes, because Whisper mishears digits ("4111, 11111, 11111, 11111"). `findCardHits` reports `valid` for the checksum.
+- **Call IDs:** `ai-<time><n>`, unique across reloads. The uploaded file is stored in the `audio` table (Dexie v3) so the call still plays after a reload.
 - **Scorecard math:** weights sum to 100; N/A checks excluded and rescaled; any critical fail forces red.
 - **Redaction:** exports show `[CARD •••• 1111]`, `[EMAIL]`, `[PHONE]` — never raw PII.
-- **No network except:** HuggingFace hub (first Whisper download, then cached) + `localhost:11434`. No other fetch calls, ever.
+- **No network at run time.** Speech models and the ONNX runtime are served from `frontend/public/` (run `npm run models` once per machine); remote model loading is switched off. The only other addresses the app calls are `localhost:11434` (Ollama) and `localhost:8178` (native Whisper, optional). No other fetch calls, ever.
 
 ## 5. How to extend (common tasks)
 
