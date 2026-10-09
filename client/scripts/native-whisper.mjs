@@ -5,7 +5,7 @@
 // machine only (localhost:8178), so the app stays offline. Leave it running next to
 // `ollama serve`. If it is not running, the app falls back to Whisper base in the browser.
 //
-// First run: downloads the model once (1.6 GB, needs internet) to ~/.linya/.
+// First run: downloads the model once (1.6 GB, needs internet) to ~/.linewise/.
 // Needs whisper.cpp: `brew install whisper-cpp` on macOS.
 import { spawn, spawnSync } from "node:child_process";
 import { createWriteStream } from "node:fs";
@@ -16,7 +16,10 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 
 const PORT = 8178; // keep in step with NATIVE_WHISPER_URL in src/ai/native-whisper.ts
-const dir = join(homedir(), ".linya");
+const dir = join(homedir(), ".linewise");
+// The 1.6 GB model was first downloaded to ~/.linya: move it instead of fetching it again.
+const oldDir = join(homedir(), ".linya");
+if (await stat(oldDir).then(() => true, () => false) && !(await stat(dir).then(() => true, () => false))) await rename(oldDir, dir);
 const model = join(dir, "ggml-large-v3-turbo.bin");
 const MODEL_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin";
 

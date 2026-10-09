@@ -16,8 +16,8 @@ function toSeconds(stamp: string): number {
 
 // A line as the pieces to draw: one per word, except that hidden details (a card number,
 // a name) collapse into one label that covers the time of every word it replaces.
-// Lines from a transcribed call carry real word times. The scripted sample calls do not,
-// so their words are spread over the line at a speaking pace, which is close, not exact.
+// Lines carry a real time for every word. Calls scored before word times were kept do
+// not, so their words are spread over the line at a speaking pace: close, not exact.
 function tokens(line: TranscriptLine, lineEnd: number, found: Redaction[]): Token[] {
   const lineStart = line.words?.[0]?.start ?? toSeconds(line.time)
   const texts = line.words?.map((w) => w.text) ?? line.text.split(" ")

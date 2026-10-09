@@ -1,4 +1,4 @@
-# Linya — checklist to submission
+# Linewise — checklist to submission
 
 Deadline: **10:00 AM, October 10, 2026**. No extensions, one submission per team, and
 judges review the repo as it stands at the deadline. The build plan has the form
@@ -10,9 +10,9 @@ Tick a box by changing `[ ]` to `[x]`. Items are in the order to do them.
 
 1. [ ] **Mac:** update the working branch: `git checkout feature/test-ui`, then `git merge main`.
 2. [ ] **Windows:** `git pull` on `main`, then `npm install` and `npm run models` inside
-   `frontend/`. The app no longer downloads Whisper by itself: without `npm run models`
+   `client/`. The app no longer downloads Whisper by itself: without `npm run models`
    transcription fails with "Speech models are not installed".
-3. [ ] **Both:** `npm run build` and `npm run lint` pass in `frontend/`.
+3. [ ] **Both:** `npm run build` and `npm run lint` pass in `client/`.
 
 ## B. Prove the merged app works
 
@@ -20,13 +20,13 @@ The AI pipeline and the new UI were merged on Oct 9. The pipeline has not been r
 
 4. [ ] **Windows:** start Ollama (`ollama serve`) and run `node scripts/phase1-e2e.mjs`.
    It should end with an AI call listed and the card readback marked critical.
-5. [ ] By hand, with Local AI on: upload `frontend/public/demo-audio/call-sample.wav`,
+5. [ ] By hand, with Local AI on: upload `client/public/demo-audio/call-sample.wav`,
    press **Transcribe & score**, open the call, and check that:
    - the transcript and scorecard appear
    - the audio bar shows a waveform and plays the uploaded file
    - clicking a timestamp or a red flag line jumps the audio there
    - reloading the page keeps the call
-6. [ ] Upload one of the stereo samples too (`frontend/public/samples/call-147.m4a`).
+6. [ ] Upload one of the stereo samples too (`client/samples/call-147.m4a`).
    Stereo files get Agent and Customer labels; mono files are labelled Unknown.
 7. [ ] With Local AI off, click through all five tabs: play a demo call, press Confirm
    and Dismiss on a failed check, change a scorecard weight, export a CSV and a PDF.
@@ -39,9 +39,9 @@ The AI pipeline and the new UI were merged on Oct 9. The pipeline has not been r
     2. `ollama pull qwen2.5:3b` (about 2 GB)
     3. Quit the Ollama menu-bar app if it is running, then start the server with
        `OLLAMA_ORIGINS=http://localhost:5173 ollama serve` and leave it open
-    4. In another terminal: `cd frontend && npm run dev`, open http://localhost:5173
+    4. In another terminal: `cd client && npm run dev`, open http://localhost:5173
     5. Tick **Local AI** in the header, go to Calls, upload
-       `frontend/public/samples/call-147.m4a`, press **Transcribe & score**
+       `client/samples/call-147.m4a`, press **Transcribe & score**
     6. Expect: the card numbers show as `[CARD •••• 1111]`, "Never reads back a full card
        number" is Critical at about 00:14, and the call is still there with its audio
        after a page reload
@@ -55,7 +55,7 @@ Measured speeds on the Windows laptop: about 40 seconds to transcribe a 67-secon
 then 20 to 30 seconds per check, and there are 7 checks. One call takes a few minutes.
 
 11. [ ] Decide which laptop is the demo laptop and do every item in this section on it.
-12. [ ] While online, run `npm run models` in `frontend/` and confirm `qwen2.5:3b` is
+12. [ ] While online, run `npm run models` in `client/` and confirm `qwen2.5:3b` is
     pulled. That is everything the app needs from the internet.
     On the Mac, also run `npm run whisper` once while online (it downloads 1.6 GB) and
     start it before the demo, next to `ollama serve`. If it is not running the app still
@@ -71,11 +71,11 @@ then 20 to 30 seconds per check, and there are 7 checks. One call takes a few mi
 ## D. Fix the documents judges will read
 
 17. [ ] Add a `README.md` at the repo root. Judges land there first and there is none;
-    the only README is in `frontend/`. It needs what Linya is, setup steps, and the
+    the only README is in `client/`. It needs what Linewise is, setup steps, and the
     disclosures table.
 18. [ ] Add Mac setup steps next to the Windows ones, or say plainly that the AI backend
     was set up and tested on Windows.
-19. [ ] Review the disclosures table in `frontend/README.md` line by line:
+19. [ ] Review the disclosures table in `client/README.md` line by line:
     - **Models used:** Whisper base and `qwen2.5:3b` through Ollama. Do not list WebLLM;
       it is blocked on the test hardware and not in use.
     - **AI development tools:** it says Claude Code and notes the backend scripts suggest
@@ -89,7 +89,7 @@ then 20 to 30 seconds per check, and there are 7 checks. One call takes a few mi
       throws until approved, while its own phase notes say phases 1 to 5 are done. It
       also lists coaching notes and the waveform as to-do; both are built.
     - `docs/BACKEND_CAPSULE.md` describes the pipeline correctly but under the old name.
-22. [ ] Use the name Linya on the submission form. The concept PDF's pre-filled form and
+22. [ ] Use the name Linewise on the submission form. The concept PDF's pre-filled form and
     its "Why local?" answer still say QA Sentinel.
 23. [ ] Decide whether to rename the GitHub repo (`QA-Sentinel`) or leave it, and say
     "formerly QA Sentinel" once in the README either way.

@@ -46,7 +46,7 @@ function Devices({
   if (!online) {
     return (
       <p className="max-w-[60ch] text-muted-foreground">
-        The upload server is not running, so phones cannot send recordings yet. Start it in a terminal with <span className="font-medium text-foreground">npm run server</span> (in the frontend folder), then come back to this tab.
+        The upload server is not running, so phones cannot send recordings yet. Start it in a terminal with <span className="font-medium text-foreground">npm run server</span> (in the client folder), then come back to this tab.
       </p>
     )
   }

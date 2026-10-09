@@ -9,6 +9,7 @@ export interface CallRecord {
   scorecard: string;
   audioUrl?: string;
   fileName?: string;
+  number?: number;
   languages?: string[];
   engine?: string;
   redactions?: Redaction[];

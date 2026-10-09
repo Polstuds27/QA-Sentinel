@@ -1,5 +1,5 @@
 ---
-name: Linya
+name: Linewise
 description: Gallery White. An off-white wall, black type and one cobalt accent, applied to a call QA tool.
 colors:
   background: "#fafaf8"
@@ -91,7 +91,7 @@ components:
     padding: "0 12px"
 ---
 
-# Design System: Linya
+# Design System: Linewise
 
 The source of truth for every value here is `src/index.css` and the components in `src/components/ui/`. If this file and the code disagree, the code is right and this file needs updating.
 
@@ -109,10 +109,10 @@ QA analysts use this at a desk, working through a batch of calls. Scanning and d
 
 ## Logo
 
-Linya is Filipino for "line". The mark is two heavy lines meeting as a square-cornered L, with one cobalt dot in the open corner. The lines are the call; the dot is the moment on it worth hearing. The dot never touches the lines.
+The name is "line" plus "wise": every line of a call, read carefully. The mark is two heavy lines meeting as a square-cornered L, with one cobalt dot in the open corner. The lines are the call; the dot is the moment on it worth hearing. The dot never touches the lines.
 
 - **Geometry:** on a 24-unit square, the L is 4 units thick and runs from 3 to 21 on both axes. The dot is 8 units across, centred at (15.5, 8.5), which leaves a 4.5-unit gap to each line.
-- **In the app:** `Logo` in `src/components/logo.tsx`. The mark is a 1.5rem square with the L in `--foreground` and the dot in `--primary`; the wordmark is "Linya" at `text-xl`, weight 600, `tracking-tight`, in sentence case. Both follow the theme.
+- **In the app:** `Logo` in `src/components/logo.tsx`. The mark is a 1.5rem square with the L in `--foreground` and the dot in `--primary`; the wordmark is "Linewise" at `text-xl`, weight 600, `tracking-tight`, in sentence case. Both follow the theme.
 - **Files** (in `public/`): `logo.png` is the mark and wordmark on a transparent background for light surfaces; `logo-dark.png` is the same in off-white with the lighter cobalt for dark surfaces; `logo-mark.png` is the mark alone on a 512px square of the wall colour, for avatars and social posts; `favicon.svg` is the mark for the browser tab.
 - **Rules:** the dot is always cobalt and there is only one. Do not let it touch or overlap the L, round the L's corners, tilt the mark, or set the wordmark in capitals. Keep clear space of at least the dot's width around the logo.
 

@@ -1,0 +1,3 @@
+
+# Copy of server/data taken before the move to SQLite: agent tokens and recordings, never commit
+server-data-backup-before-sqlite/

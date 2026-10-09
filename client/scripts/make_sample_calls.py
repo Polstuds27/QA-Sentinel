@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Generate the demo call recordings in public/samples/ (macOS only).
+"""Generate three scripted test recordings in samples/ (macOS only).
 
 Each line of a call is spoken by a built-in `say` voice, then the lines are stitched
 into one stereo file: agent on the left channel, customer on the right, which is how
-the spec expects call recordings to arrive. The script prints when each line starts;
-copy those times into src/mock.ts so the transcript and flags match the audio.
+the spec expects call recordings to arrive. They are test files to upload and score:
+the app itself ships with no sample data.
 
     python3 scripts/make_sample_calls.py
 
@@ -20,7 +20,7 @@ import wave
 RATE = 22050
 LEAD_IN = 0.4  # seconds of silence before the first line
 GAP = 0.55  # seconds between lines
-OUT = pathlib.Path(__file__).resolve().parent.parent / "public" / "samples"
+OUT = pathlib.Path(__file__).resolve().parent.parent / "samples"
 
 # (speaker, text shown in the transcript, text to speak if it differs)
 CALLS = {

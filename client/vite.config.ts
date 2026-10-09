@@ -5,7 +5,7 @@ import react from '@vitejs/plugin-react'
 import { defineConfig, type Connect, type Plugin } from 'vite'
 
 const publicDir = fileURLToPath(new URL('./public', import.meta.url))
-const uploadServer = process.env.LINYA_SERVER ?? 'http://localhost:8787'
+const uploadServer = process.env.LINEWISE_SERVER ?? 'http://localhost:8787'
 
 // The speech library probes for optional model files. Vite answers an unknown path with
 // index.html, which the library then tries to read as a model config and fails. A model

@@ -2,7 +2,7 @@
 <#
   QA Sentinel - new-machine setup (Windows 10/11, PowerShell).
   Installs everything the local backend needs: Node check, Ollama, qwen2.5:3b,
-  OLLAMA_ORIGINS for the browser, and frontend dependencies.
+  OLLAMA_ORIGINS for the browser, and client dependencies.
   Whisper base (~150 MB) downloads itself on first transcription (internet once).
   Usage: right-click > Run with PowerShell, or:  powershell -ExecutionPolicy Bypass -File setup-local.ps1
 #>
@@ -52,16 +52,16 @@ Ok "qwen2.5:3b ready"
 & $ollamaExe list
 
 Step "5/5 Frontend dependencies"
-Push-Location (Join-Path $root "frontend")
+Push-Location (Join-Path $root "client")
 npm install
 Ok "npm install done"
-Write-Host "Downloading the speech models into frontend/public/models (about 300 MB, one time)..."
+Write-Host "Downloading the speech models into client/public/models (about 300 MB, one time)..."
 npm run models
 Pop-Location
 Ok "speech models installed - the app now runs with no internet"
 
 Write-Host "`nAll set. Run the app:" -ForegroundColor Cyan
 Write-Host "  1. ollama serve   (keep this terminal open; or leave the Ollama tray app running)"
-Write-Host "  2. cd frontend; npm run dev   -> http://localhost:5173"
+Write-Host "  2. cd client; npm run dev   -> http://localhost:5173"
 Write-Host "  3. Flip 'Local AI' on, upload audio, Transcribe & score."
 Write-Host "Docs: docs/BACKEND_CAPSULE.md (handoff) , docs/LOCAL_AI_PLAN.md (measured results)."

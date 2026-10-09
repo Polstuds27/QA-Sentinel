@@ -58,7 +58,7 @@ ollama serve   # keep running while the app runs
 ```
 
 ```powershell
-cd frontend; npm install; npm run dev   # app at http://localhost:5173
+cd client; npm install; npm run dev   # app at http://localhost:5173
 ```
 
 Flip **Local AI** on in the app header (it health-checks Ollama first), upload audio,
@@ -91,7 +91,7 @@ hit **Transcribe & score**.
 - **Call IDs:** `ai-<time><n>`, unique across reloads. The uploaded file is stored in the `audio` table (Dexie v3) so the call still plays after a reload.
 - **Scorecard math:** weights sum to 100; N/A checks excluded and rescaled; any critical fail forces red.
 - **Redaction:** exports show `[CARD •••• 1111]`, `[EMAIL]`, `[PHONE]` — never raw PII.
-- **No network at run time.** Speech models and the ONNX runtime are served from `frontend/public/` (run `npm run models` once per machine); remote model loading is switched off. The only other addresses the app calls are `localhost:11434` (Ollama) and `localhost:8178` (native Whisper, optional). No other fetch calls, ever.
+- **No network at run time.** Speech models and the ONNX runtime are served from `client/public/` (run `npm run models` once per machine); remote model loading is switched off. The only other addresses the app calls are `localhost:11434` (Ollama) and `localhost:8178` (native Whisper, optional). No other fetch calls, ever.
 
 ## 5. How to extend (common tasks)
 

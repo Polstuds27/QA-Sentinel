@@ -1,10 +1,12 @@
-// Persistence service over the Dexie `qa-sentinel` database.
-// Demo calls stay in-memory (mock.ts); everything the analyst produces —
-// AI-processed calls, verdict overrides, edited scorecards, coaching notes —
-// is stored here and reloaded on startup.
+// Storage inside this browser (IndexedDB, through Dexie). This was Linewise's only storage
+// before the SQLite database on the server. It is now the fallback for when the server is
+// not running, and the source that store.ts copies old calls from. See store.ts.
 import { db } from "./db";
 import { BANK_SUPPORT_V2, type Check } from "./scorecard";
 import type { DemoCall } from "../mock";
+
+// The first scored call is No. 1. A database that already has calls carries on from its highest.
+export const FIRST_CALL_NUMBER = 1;
 
 export const SCORECARD_ID = "bank-support-v2";
 
@@ -20,6 +22,7 @@ export async function saveAICall(call: DemoCall, recording?: Blob): Promise<void
       duration: call.duration,
       scorecard: call.scorecard,
       fileName: call.name,
+      number: call.number,
       speakers: call.speakers,
       languages: call.languages,
       engine: call.engine,
@@ -47,6 +50,13 @@ export async function saveAICall(call: DemoCall, recording?: Blob): Promise<void
 
 export async function loadAICalls(): Promise<DemoCall[]> {
   const recs = await db.calls.where("source").equals("ai").sortBy("createdAt");
+  // Calls stored before numbering existed get the next free numbers, oldest first.
+  let highest = Math.max(FIRST_CALL_NUMBER - 1, ...recs.map((r) => r.number ?? 0));
+  for (const rec of recs) {
+    if (rec.number) continue;
+    rec.number = ++highest;
+    await db.calls.update(rec.id, { number: rec.number });
+  }
   recs.reverse();
   const calls: DemoCall[] = [];
   for (const rec of recs) {
@@ -59,6 +69,7 @@ export async function loadAICalls(): Promise<DemoCall[]> {
       duration: rec.duration,
       scorecard: rec.scorecard,
       name: rec.fileName,
+      number: rec.number,
       speakers: rec.speakers,
       languages: rec.languages,
       engine: rec.engine,

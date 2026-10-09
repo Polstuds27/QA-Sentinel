@@ -30,7 +30,7 @@ Spec refs: pipeline §06, stack §10, build order §12. Hard rule: no cloud AI A
 - `Transformers.js` Whisper (base → small) ONNX, WebGPU with WASM fallback, inside a Web Worker.
 - Web Audio API decodes + resamples uploads to 16 kHz mono; stereo calls transcribe per
   channel (agent/customer), mono falls back to LLM turn-labelling.
-- Returns `TranscriptChunk[]` (`frontend/src/ai/types.ts`); UI stays on mock until worker
+- Returns `TranscriptChunk[]` (`client/src/ai/types.ts`); UI stays on mock until worker
   passes its acceptance clip.
 
 DONE (shipped as Phase 1+2 piece): `src/ai/whisper.ts` + `src/ai/speech.worker.ts` —
@@ -88,6 +88,6 @@ provider abstraction (Ollama live, WebLLM stubbed); `OLLAMA_ORIGINS` set for
 
 ## Interfaces (already stubbed)
 
-- `frontend/src/ai/types.ts` — `TranscriptChunk`, `PipelineJob`, reuses `CheckResult`.
-- `frontend/src/ai/pipeline.ts` — `AI_ENABLED = false`; `runLocalPipeline()` throws until
+- `client/src/ai/types.ts` — `TranscriptChunk`, `PipelineJob`, reuses `CheckResult`.
+- `client/src/ai/pipeline.ts` — `AI_ENABLED = false`; `runLocalPipeline()` throws until
   approved. Flip the flag only when Phase 0 passes on the demo laptop.

@@ -1,4 +1,4 @@
-// Client for the upload server (../server): the part of Linya that receives recordings
+// Client for the upload server (../server): the part of Linewise that receives recordings
 // sent from agents' phones. The app works without it; these calls just fail and the
 // phone features say the server is not running.
 
@@ -66,5 +66,5 @@ export async function fetchRecordingAudio(recording: Recording): Promise<File> {
   return new File([await res.blob()], recording.name, { type: res.headers.get("content-type") ?? "audio/mp4" });
 }
 
-/** What an agent pastes into the "Send to Linya" shortcut: where to send, and who they are. */
+/** What an agent pastes into the "Send to Linewise" shortcut: where to send, and who they are. */
 export const uploadLink = (base: string, agent: Agent) => `${base}/api/uploads?token=${agent.token}`;

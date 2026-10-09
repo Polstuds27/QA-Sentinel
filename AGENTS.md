@@ -1,8 +1,9 @@
-# AGENTS.md — Linya
+# AGENTS.md — Linewise
 
-Linya (Filipino for "line") was called QA Sentinel until Oct 9, 2026. The concept PDF, the
+Linewise is the product's name. It was QA Sentinel until Oct 9, 2026, then Linya until
+Oct 10 (old database and model folders are renamed automatically on start). The concept PDF, the
 repo folder, the GitHub repo and some internal keys (`qa-sentinel` IndexedDB name,
-`qa-ai-enabled` localStorage key) still use the old name; use Linya everywhere new.
+`qa-ai-enabled` localStorage key) still use the old name; use Linewise everywhere new. The promo video project is still the folder `linya-ads/`.
 
 Local-AI call-center QA (AppBuildersPH Hackathon 2026, Local AI track): batch-upload
 call recordings, transcribe + score + flag every call on-device, export redacted reports.
@@ -11,85 +12,92 @@ Submission due 10:00 AM Oct 10 — working product over slides.
 
 ## Layout
 
-- `frontend/` — Vite 8 + React 19 + TS + Tailwind v4 SPA. The app.
-- `frontend/src/App.tsx` — all 5 screens. The scorecard editor can add, reword, retype
+- `client/` — Vite 8 + React 19 + TS + Tailwind v4 SPA. The app.
+- `client/src/App.tsx` — all 5 screens. The scorecard editor can add, reword, retype
   and remove checks (each with an optional "how to judge it" note that is sent to the
   model); uploaded calls can be deleted from the Calls list or call detail, which also
   removes the stored recording; a queue row shows a spinner and a progress line while it
-  is processed. `mock.ts` — 3 demo calls (clean, critical #147
-  62/100 RED, borderline); transcripts and verdicts are hand-written, line times match
-  the sample recordings.
-- `frontend/src/ai/` — working local pipeline: `whisper.ts` + `speech.worker.ts`
+  is processed. `mock.ts` — only the types of a scored call now (`DemoCall`,
+  `TranscriptLine`, `callTitle`). The app ships with no sample data: every call shown was
+  really transcribed and scored, and a fresh install starts empty.
+- `client/src/ai/` — working local pipeline: `whisper.ts` + `speech.worker.ts`
   (Whisper base and pyannote speaker separation, Web Worker), `ollama.ts` (qwen2.5:3b scoring), `backend.ts`
   (provider abstraction: Ollama live, WebLLM stubbed), `coaching.ts` (notes),
   `pipeline.ts` (dispatcher, two-tier quote guard, deterministic critical override). A
   verdict that fails the quote guard is asked for once more, then left unscored as
   "Needs manual review" instead of failing the whole call.
-  Behind the in-app Local AI toggle (`localStorage qa-ai-enabled`). OFF = the three
-  scripted sample calls plus any stored real calls; ON = stored real calls only.
-- `frontend/src/lib/` — `scorecard.ts`, `pii.ts` (`redactPII` + `findCardHits`: any run
+  Behind the in-app Local AI toggle (`localStorage qa-ai-enabled`). OFF = stored calls
+  can be read but nothing new is scored; ON = uploads and phone recordings are scored.
+- `client/src/lib/` — `scorecard.ts`, `pii.ts` (`redactPII` + `findCardHits`: any run
   of 13–19 digits is redacted and flagged even if Luhn fails, because Whisper mishears
   digits; `valid` says whether the checksum matched),
   `db.ts` (Dexie v3: calls, transcripts, results, overrides, scorecards, audio),
-  `store.ts` (persistence service), `export.ts` (redacted CSV + PDF),
+  `store.ts` (persistence service), `export.ts` (redacted PDF report; CSV export was removed),
   `agents.ts` (per-agent stats).
-- `frontend/DESIGN.md` — the Gallery White design system (off-white wall, black type,
+- `client/DESIGN.md` — the Gallery White design system (off-white wall, black type,
   cobalt as the only accent, square corners, no shadows). Read it before touching UI.
-- `frontend/src/components/ui/` — shadcn/ui (Base UI, `base-nova`) components, restyled in
+- `client/src/components/ui/` — shadcn/ui (Base UI, `base-nova`) components, restyled in
   place for Gallery White. Add more with `npx shadcn@latest add <name>`, then restyle to
   match. Imports use the `@/` alias (`@/components/ui/button`, `@/lib/utils`).
-- `frontend/src/index.css` — all colour tokens (`:root` and `.dark`); dark mode follows the
+- `client/src/index.css` — all colour tokens (`:root` and `.dark`); dark mode follows the
   system setting via `main.tsx`.
-- `frontend/src/components/logo.tsx` — the Linya logo (an L with a cobalt dot, plus the
-  wordmark). PNG exports and the favicon are in `frontend/public/` (`logo.png`,
+- `client/src/components/logo.tsx` — the Linewise logo (an L with a cobalt dot, plus the
+  wordmark). PNG exports and the favicon are in `client/public/` (`logo.png`,
   `logo-dark.png`, `logo-mark.png`, `favicon.svg`).
-- `frontend/src/components/transcript.tsx` — the transcript on call detail. It follows the
+- `client/src/components/transcript.tsx` — the transcript on call detail. It follows the
   audio and shows the word being spoken in cobalt; clicking a word plays from it. Uses the
-  per-word times stored on each line (`words`); the scripted sample calls have none, so
-  theirs are estimated from the line times.
-- `frontend/src/components/audio-player.tsx` + `waveform.tsx` — custom player for call
+  per-word times stored on each line (`words`); calls scored before those were kept have
+  none, so theirs are estimated from the line times.
+- `client/src/components/audio-player.tsx` + `waveform.tsx` — custom player for call
   detail: hairline track, cobalt playhead, a tick at each flagged timestamp, and a canvas
   waveform decoded from the recording (agent channel above the line, customer below) that
   moves at the playhead during playback. Plain `<audio>` underneath; `wavesurfer.js` is
   still unwired and no longer needed for this.
-- `frontend/public/samples/call-*.m4a` — one recording per demo call, built by
-  `frontend/scripts/make_sample_calls.py` (macOS `say` voices; stereo, agent left,
-  customer right). Synthetic voices on scripted calls: demo data, never a benchmark. If a
-  script changes, re-run it and copy the printed times into `mock.ts`. The calls are 7 to
-  31 seconds long, so the spec's "click 02:13" moment is at 00:14 on Call #147.
-- `frontend/scripts/` — `phase0-*.mjs` (model checks), `phase1-e2e.mjs` (full
+- `client/samples/call-*.m4a` — three scripted test recordings to upload and score, built
+  by `client/scripts/make_sample_calls.py` (macOS `say` voices; stereo, agent left,
+  customer right). They are not part of the app and are not served by it. Synthetic voices
+  on scripted calls: test input, never a benchmark. `call-147.m4a` is the spec's scenario
+  (card read back, no identity check) and should score 62 with the preset scorecard.
+- `client/scripts/` — `phase0-*.mjs` (model checks), `phase1-e2e.mjs` (full
   upload→transcribe→score browser test; it finds elements by `data-testid` and by the
   header text "Local AI on (Whisper + Ollama 3B)", so keep those when restyling).
   `phase0.html` = WebLLM harness (blocked HW).
 - `docs/LOCAL_AI_PLAN.md` — phased local AI/backend plan. `docs/BACKEND_CAPSULE.md` —
   backend notes.
-- `server/` — optional upload server (Node, Express, `npm run server` from `frontend/`,
-  port 8787) so agents can send recordings from their iPhones with an Apple Shortcut.
-  It registers agents with one token each, takes `POST /api/uploads`, drops duplicates by
-  SHA-256, and queues files; the app (Local AI on) takes one at a time through the Vite
-  `/api` proxy and scores it with the normal pipeline, under that agent's name. Data is in
-  `server/data/` (git-ignored: tokens and recordings). Admin routes answer only to the
-  laptop itself and refuse anything that came through a tunnel. UI: `devices.tsx` (Agents
-  tab), `phone-uploads.tsx` (Calls tab), `lib/server.ts`. Full guide, shortcut steps, curl
-  and test checklist: `docs/PHONE_UPLOADS.md`. The shortcut has not been run on an iPhone.
+- `server/` — Linewise's server (Node, Express, `npm run server` from `client/`, port 8787).
+  Two jobs. (1) Storage: one SQLite database, `server/data/linewise.db`, through Node's
+  built-in `node:sqlite` (no install). Tables in `server/db.mjs`: `agents`, `uploads`
+  (recordings phones sent), `calls`, `transcript_lines`, `results`, `decisions`,
+  `scorecards`, `settings`. Audio is files beside it: `server/data/uploads/` (from phones,
+  named by SHA-256) and `server/data/calls/` (dragged into the app, named by call id).
+  (2) Phone uploads: one token per agent, `POST /api/uploads`, duplicates dropped by hash,
+  a queue the app (Local AI on) works through one at a time via the Vite `/api` proxy.
+  `server/data/` is git-ignored (tokens and recordings). Admin routes answer only to the
+  laptop itself and refuse anything that came through a tunnel.
+- `client/src/lib/store.ts` — the app's storage. Uses the server's database when it is
+  running, else falls back to IndexedDB in the browser (`store.local.ts`, the old way). The
+  first time it finds the server it copies the browser's calls into the database and
+  leaves the browser copy in place. UI for phones: `devices.tsx` (Agents tab),
+  `phone-uploads.tsx` (Calls tab), `lib/server.ts`. Guide, shortcut steps, curl and test
+  checklist: `docs/PHONE_UPLOADS.md`. The shortcut works on two real iPhones (Oct 10).
 - `linya-ads/` — Remotion project for the promo video. Separate package, not part of the app.
 - Local backend only: Ollama on localhost (qwen2.5:3b) + IndexedDB in the browser.
   No hosted servers, no cloud APIs — audio never leaves the machine.
   `recharts` wired (dashboard); `wavesurfer.js` installed but unwired.
-- The repo root (this folder) is the git repo; run git here, npm inside `frontend/`.
+- The repo root (this folder) is the git repo; run git here, npm inside `client/`.
 
 ## Commands
 
 The npm commands are the same in zsh, bash and PowerShell.
 
 ```sh
-cd frontend; npm install
+cd client; npm install
 npm run models                             # once per machine: fetch speech models (needs internet)
-npm run dev                                # sample calls until the Local AI toggle is on
+npm run dev                                # the app; tick Local AI to score recordings
 npm run build                              # tsc -b + vite build (must pass)
 npm run lint                               # oxlint
 npm run whisper                            # optional: native Whisper large-v3-turbo (macOS, whisper.cpp)
-npm run server                             # optional: upload server for recordings sent from phones
+npm run server                             # the server: SQLite storage and uploads from phones
 node scripts/phase1-e2e.mjs                # whole-piece E2E (needs dev + ollama up)
 npm run eval                               # scoring regression check (needs ollama up)
 npm run eval:redaction                     # redaction regression check (needs ollama up)
@@ -108,7 +116,7 @@ Speech to text has two engines; the pipeline picks per call and records which on
 
 - Native (preferred): `npm run whisper` starts whisper.cpp with Whisper large-v3-turbo on
   `localhost:8178` (`scripts/native-whisper.mjs`, `src/ai/native-whisper.ts`). Needs
-  `brew install whisper-cpp`; the 1.6 GB model lives in `~/.linya/`, outside the repo.
+  `brew install whisper-cpp`; the 1.6 GB model lives in `~/.linewise/`, outside the repo.
   Runs with `-dtw large.v3.turbo -nfa`: the app reads each word's end time from `t_dtw`,
   because the service's ordinary word times stamp a sentence's first word in the silence
   before it. Use the name `localhost`, not `127.0.0.1`, in the URL.
@@ -123,8 +131,8 @@ stays on base in the browser.
 
 Offline by construction: the app makes no request to any machine but this one
 (`localhost:11434` for Ollama, `localhost:8178` for native Whisper, its own origin).
-`npm run models` puts Whisper base and pyannote segmentation 3.0 in `frontend/public/models/`
-and the ONNX WebAssembly runtime in `frontend/public/ort/` (both git-ignored, about 340 MB; one file
+`npm run models` puts Whisper base and pyannote segmentation 3.0 in `client/public/models/`
+and the ONNX WebAssembly runtime in `client/public/ort/` (both git-ignored, about 340 MB; one file
 is over GitHub's 100 MB limit). `speech.worker.ts` sets `allowRemoteModels = false`
 and points the runtime at `/ort/`; without that the library pulls it from cdn.jsdelivr.net.
 `localModelPath` must stay a relative path (a full URL makes the library skip tokenizers).
@@ -159,7 +167,7 @@ duplicated or invented words. Synthetic voices with no overlap: an easy case.
 ## Rules from the spec doc
 
 Source: `QA-Sentinel-Concept.pdf` (concept, build plan and pitch, prepared Oct 9, 2026).
-Its navy/teal mockups are superseded by `frontend/DESIGN.md`; everything else stands.
+Its navy/teal mockups are superseded by `client/DESIGN.md`; everything else stands.
 
 - Scorecard `BANK_SUPPORT_V2` (7 checks, weights sum to 100): green ≥85, amber 70–84,
   red <70; any critical fail forces red; N/A checks excluded and score scaled to 100.
@@ -232,7 +240,7 @@ working backend because WebLLM is blocked on the test hardware.
 
 - Public GitHub repo by the deadline; judges review it as of then.
 - README with setup steps for judges and the disclosures. Today that is
-  `frontend/README.md`; there is no README at the repo root, where judges land first.
+  `client/README.md`; there is no README at the repo root, where judges land first.
 - About 1 minute of demo video, and an X / LinkedIn post tagging Devin / Cognition with
   #AppBuildersPH.
 - List only models and tools actually used. Fake benchmarks can get a result disputed.

@@ -1,9 +1,9 @@
 {
-  "name": "linya-upload-server",
+  "name": "linewise-upload-server",
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "Receives call recordings from agents' phones on the local network and queues them for the Linya app to score.",
+  "description": "Receives call recordings from agents' phones on the local network and queues them for the Linewise app to score.",
   "scripts": {
     "start": "node index.mjs"
   },

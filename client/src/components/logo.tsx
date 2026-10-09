@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils"
 
-// Linya is Filipino for "line": two lines meet as an L, and the cobalt dot is the
+// Linewise: every line of a call, read wisely. Two lines meet as an L, and the cobalt dot is the
 // moment on the call worth hearing. The dot never touches the lines.
 function Logo({ className }: { className?: string }) {
   return (
@@ -14,7 +14,7 @@ function Logo({ className }: { className?: string }) {
         <path d="M3 3h4v14h14v4H3z" className="fill-foreground" />
         <circle cx="15.5" cy="8.5" r="4" className="fill-primary" />
       </svg>
-      Linya
+      Linewise
     </span>
   )
 }

@@ -1,42 +1,16 @@
-// Export service: redacted CSV (per call) and redacted PDF report (per call).
+// Export service: a redacted PDF report per call.
 // Card numbers, emails and PH mobiles are always redacted — never export raw PII.
 import { jsPDF } from "jspdf";
-import type { DemoCall } from "../mock";
+import { callTitle, type DemoCall } from "../mock";
 import { STATUS_LABEL, scoreCall, type Check } from "./scorecard";
 import { redactPII } from "./pii";
-
-export function callToCSV(call: DemoCall): string {
-  const rows = [
-    ["call_id", "agent", "check_id", "verdict", "timestamp", "evidence_redacted"],
-    ...call.results.map((r) =>
-      [
-        call.id,
-        call.agent,
-        r.check_id,
-        r.verdict,
-        r.timestamp ?? "",
-        `"${redactPII(r.evidence ?? "", call.redactions).replace(/"/g, "'")}"`,
-      ].join(","),
-    ),
-  ];
-  return rows.join("\n");
-}
-
-export function downloadCSV(call: DemoCall): void {
-  const blob = new Blob([callToCSV(call)], { type: "text/csv" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = `qa-call-${call.id}-redacted.csv`;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-}
 
 export function exportPDF(call: DemoCall, checks: Check[]): void {
   const { score, status } = scoreCall(checks, call.results);
   const doc = new jsPDF();
   let y = 18;
   doc.setFontSize(16);
-  doc.text(`Linya — ${call.name ?? `Call #${call.id}`} (REDACTED)`, 14, y);
+  doc.text(`Linewise — ${callTitle(call)} (REDACTED)`, 14, y);
   y += 8;
   doc.setFontSize(11);
   doc.text(`Agent: ${call.agent}  Duration: ${call.duration}  Scorecard: ${call.scorecard}`, 14, y);
