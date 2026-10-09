@@ -1,6 +1,15 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
+import { CheckIcon, MinusIcon, XIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DEMO_CALLS, demoScore, type DemoCall } from "./mock";
-import { BANK_SUPPORT_V2, scoreCall, type Check } from "./lib/scorecard";
+import { BANK_SUPPORT_V2, scoreCall, type CallStatus, type Check } from "./lib/scorecard";
 import { redactPII } from "./lib/pii";
 
 type Tab = "calls" | "detail" | "scorecards" | "agents" | "export";
@@ -16,13 +25,25 @@ function toSeconds(ts: string): number {
   return m * 60 + s;
 }
 
-function statusColor(s: string) {
-  return s === "red"
-    ? "bg-red-100 text-red-700"
-    : s === "amber"
-      ? "bg-amber-100 text-amber-700"
-      : "bg-emerald-100 text-emerald-700";
+const STATUS_LABEL: Record<CallStatus, string> = { red: "Red", amber: "Amber", green: "Green" };
+
+// One accent only (DESIGN.md): status reads from the word and the weight of the
+// edge, not from a traffic-light hue. Red is the one error state.
+function StatusBadge({ status, children }: { status: CallStatus; children: ReactNode }) {
+  const variant = status === "red" ? "destructive" : status === "amber" ? "strong" : "outline";
+  return <Badge variant={variant}>{children}</Badge>;
 }
+
+const VERDICTS = {
+  pass: { label: "Pass", icon: CheckIcon, className: "text-foreground" },
+  fail: { label: "Fail", icon: XIcon, className: "text-destructive" },
+  critical: { label: "Critical", icon: XIcon, className: "text-destructive" },
+  na: { label: "N/A", icon: MinusIcon, className: "text-muted-foreground" },
+};
+
+const SECTION = "grid gap-x-10 gap-y-8 lg:grid-cols-12";
+const PANEL = "animate-hang pt-12 pb-32 sm:pt-20";
+const HEADING = "display text-3xl sm:text-4xl";
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("detail");
@@ -87,163 +108,210 @@ export default function App() {
     { id: "export", label: "Export" },
   ];
 
+  const total = checks.reduce((a, c) => a + c.weight, 0);
+
   return (
-    <div className="min-h-screen bg-[#0a1628] text-slate-200">
-      <header className="flex items-center justify-between border-b border-white/10 px-6 py-3">
-        <div className="flex items-center gap-3">
-          <span className="font-bold text-white">QA Sentinel</span>
-          <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-300">
-            ● Offline ready (UI shell — AI pipeline not wired yet)
-          </span>
+    <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className="min-h-screen">
+      <header className="sticky top-0 z-10 bg-background">
+        <div className="mx-auto flex w-full max-w-7xl flex-col gap-x-10 px-5 sm:px-8 md:h-16 md:flex-row md:items-center md:justify-between">
+          <div className="flex h-14 min-w-0 items-center gap-4">
+            <span className="shrink-0 text-lg font-semibold tracking-tight">QA Sentinel</span>
+            <span className="label flex min-w-0 items-center gap-2 text-muted-foreground">
+              <span aria-hidden className="size-2 shrink-0 rounded-full bg-foreground" />
+              <span className="truncate">Offline ready (UI shell — AI pipeline not wired yet)</span>
+            </span>
+          </div>
+          <nav className="-mx-5 shrink-0 overflow-x-auto px-5 sm:-mx-8 sm:px-8 md:mx-0 md:px-0">
+            <TabsList className="w-max min-w-full">
+              {tabs.map((t) => (
+                <TabsTrigger key={t.id} value={t.id}>
+                  {t.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </nav>
         </div>
-        <nav className="flex gap-1">
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`rounded px-3 py-1.5 text-sm ${tab === t.id ? "bg-white/10 text-white" : "text-slate-400 hover:text-white"}`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </nav>
       </header>
 
-      <main className="mx-auto max-w-6xl space-y-6 p-6">
-        {tab === "calls" && (
-          <section className="space-y-4">
-            <h2 className="text-xl font-semibold text-white">1 · Upload &amp; queue</h2>
-            <label className="block cursor-pointer rounded-xl border-2 border-dashed border-white/15 p-8 text-center hover:border-emerald-400">
-              <span className="text-sm">Drop MP3 / WAV / M4A here or click to browse (batch)</span>
-              <input type="file" accept="audio/*,.mp3,.wav,.m4a" multiple className="hidden" onChange={(e) => onFiles(e.target.files)} />
-            </label>
-            {queue.length > 0 && (
-              <ul className="space-y-1 text-sm">
-                {queue.map((q, i) => (
-                  <li key={i} className="flex justify-between rounded bg-white/5 px-3 py-2">
-                    <span>{q.name}</span>
-                    <span className="text-emerald-300">{q.status} (transcription TODO — AI phase)</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <h2 className="pt-4 text-xl font-semibold text-white">2 · Calls list</h2>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={flaggedOnly} onChange={(e) => setFlaggedOnly(e.target.checked)} />
-              Flagged (red) only
-            </label>
-            <ul className="space-y-2">
-              {visible.map((c) => {
-                const s = scoreCall(checks, c.results);
-                const flags = c.results.filter((r) => r.verdict === "fail").length;
-                return (
-                  <li key={c.id}>
-                    <button
-                      onClick={() => { setSelectedId(c.id); setTab("detail"); }}
-                      className="flex w-full items-center justify-between rounded-xl bg-white p-4 text-left text-slate-900 hover:ring-2 hover:ring-emerald-500"
-                    >
-                      <span><b>Call #{c.id}</b> <span className="text-sm text-slate-500">Agent: {c.agent} · {c.duration} · {c.scorecard}</span></span>
-                      <span className="flex items-center gap-3">
-                        <span className="text-xs text-slate-500">{flags} flags</span>
-                        <span className={`rounded-full px-3 py-1 text-sm font-bold ${statusColor(s.status)}`}>{s.score} / 100</span>
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        )}
-
-        {tab === "detail" && (
-          <section className="rounded-2xl bg-white p-6 text-slate-900">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold">Call #{selected.id} <span className="text-sm font-normal text-slate-500">Agent: {selected.agent} · {selected.duration} · {selected.scorecard}</span></h2>
-              <span className={`rounded-full px-3 py-1 text-sm font-bold ${statusColor(status)}`}>{score} / 100 · {status.toUpperCase()}</span>
-            </div>
-            <audio ref={audioRef} controls className="mt-4 w-full" />
-            <p className="mt-1 text-xs text-slate-500">Demo transcripts are built-in. Uploaded files play here after upload; click any timestamp to seek.</p>
-            <div className="mt-4 grid gap-6 md:grid-cols-2">
-              <div>
-                <h3 className="mb-2 text-xs font-bold tracking-wider text-slate-500">TRANSCRIPT (PII REDACTED)</h3>
-                <ul className="space-y-2">
-                  {selected.lines.map((l, i) => (
-                    <li key={i} className="rounded-lg bg-slate-100 px-3 py-2 text-sm">
-                      <button className="mr-2 font-mono text-xs text-slate-500 underline" onClick={() => seek(l.time, queue[0]?.url)}>{l.time}</button>
-                      <b className="mr-2 text-xs">{l.speaker}</b>
-                      {redactPII(l.text)}
+      <main className="mx-auto w-full max-w-7xl px-5 sm:px-8">
+        <TabsContent value="calls" className={cn(PANEL, "flex flex-col gap-24")}>
+          <section className={SECTION}>
+            <h2 className={cn(HEADING, "lg:col-span-5")}>1 · Upload &amp; queue</h2>
+            <div className="flex flex-col gap-6 lg:col-span-7">
+              <label className="relative flex min-h-48 cursor-pointer items-center justify-center border border-dashed border-muted-foreground p-8 text-center transition-colors duration-200 hover:border-foreground has-focus-visible:border-foreground has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-ring">
+                <span className="max-w-[38ch] font-medium">Drop MP3 / WAV / M4A here or click to browse (batch)</span>
+                <input type="file" accept="audio/*,.mp3,.wav,.m4a" multiple className="absolute inset-0 cursor-pointer opacity-0" onChange={(e) => onFiles(e.target.files)} />
+              </label>
+              {queue.length > 0 && (
+                <ul className="border-b border-border">
+                  {queue.map((q, i) => (
+                    <li key={i} className="flex flex-wrap justify-between gap-x-6 gap-y-1 border-t border-border py-3 text-sm">
+                      <span className="min-w-0 font-medium break-words">{q.name}</span>
+                      <span className="text-muted-foreground">{q.status} (transcription TODO — AI phase)</span>
                     </li>
                   ))}
                 </ul>
-              </div>
-              <div>
-                <h3 className="mb-2 text-xs font-bold tracking-wider text-slate-500">SCORECARD</h3>
-                <ul className="space-y-2">
-                  {checks.map((c) => {
-                    const r = selected.results.find((x) => x.check_id === c.id);
-                    const badge = !r || r.verdict === "not_applicable" ? "N/A" : r.verdict === "pass" ? "PASS" : c.critical ? "CRIT" : "FAIL";
+              )}
+            </div>
+          </section>
+
+          <section className={SECTION}>
+            <div className="flex flex-col gap-6 lg:col-span-5">
+              <h2 className={HEADING}>2 · Calls list</h2>
+              <Field orientation="horizontal">
+                <Checkbox id="flagged-only" checked={flaggedOnly} onCheckedChange={(v) => setFlaggedOnly(v)} />
+                <FieldLabel htmlFor="flagged-only">Flagged (red) only</FieldLabel>
+              </Field>
+            </div>
+            <div className="lg:col-span-7">
+              {visible.length === 0 ? (
+                <Empty>
+                  <EmptyHeader>
+                    <EmptyTitle>No red calls</EmptyTitle>
+                    <EmptyDescription>Nothing here scored below 70 or failed a critical check. Clear the filter to see every call.</EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
+              ) : (
+                <ul className="border-b border-border">
+                  {visible.map((c) => {
+                    const s = scoreCall(checks, c.results);
+                    const flags = c.results.filter((r) => r.verdict === "fail").length;
                     return (
-                      <li key={c.id} className="flex items-center gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm">
-                        <span className={`w-12 text-xs font-bold ${badge === "PASS" ? "text-emerald-600" : badge === "N/A" ? "text-slate-400" : "text-red-600"}`}>{badge}</span>
-                        <span className="flex-1">{c.label} <span className="text-xs text-slate-400">({c.weight})</span></span>
-                        {r?.timestamp && <span className="font-mono text-xs text-slate-500">{r.timestamp}</span>}
+                      <li key={c.id} className="border-t border-border">
+                        <button
+                          onClick={() => { setSelectedId(c.id); setTab("detail"); }}
+                          className="group flex w-full flex-wrap items-center justify-between gap-x-6 gap-y-3 py-6 text-left"
+                        >
+                          <span className="flex items-start gap-3">
+                            <span
+                              aria-hidden
+                              className={cn(
+                                "mt-2.5 size-2 shrink-0 rounded-full border border-foreground transition-colors duration-200 group-hover:border-primary group-hover:bg-primary",
+                                c.id === selectedId && "border-primary bg-primary",
+                              )}
+                            />
+                            <span className="flex flex-col gap-1">
+                              <span className="text-xl font-medium tracking-tight">Call #{c.id}</span>
+                              <span className="label text-muted-foreground">Agent: {c.agent} · {c.duration} · {c.scorecard}</span>
+                            </span>
+                          </span>
+                          <span className="flex items-center gap-4 max-sm:pl-5">
+                            <span className="label text-muted-foreground tabular-nums">{flags} flags</span>
+                            <StatusBadge status={s.status}>{s.score} / 100 · {STATUS_LABEL[s.status]}</StatusBadge>
+                          </span>
+                        </button>
                       </li>
                     );
                   })}
                 </ul>
-                <div className="mt-4 flex gap-2">
-                  <button className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">Confirm flag</button>
-                  <button className="rounded-lg bg-slate-200 px-4 py-2 text-sm">Dismiss</button>
-                  <button onClick={() => exportCSV(selected)} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white">Export</button>
-                </div>
-              </div>
+              )}
             </div>
           </section>
-        )}
+        </TabsContent>
 
-        {tab === "scorecards" && (
-          <section className="rounded-2xl bg-white p-6 text-slate-900">
-            <h2 className="text-xl font-bold">4 · Scorecard editor — Bank Support v2</h2>
-            <p className="text-sm text-slate-500">Preset from spec §08. Total must equal 100. Stored in IndexedDB (Dexie) — persistence TODO.</p>
-            <ul className="mt-4 space-y-2">
+        <TabsContent value="detail" className={PANEL}>
+          <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-6">
+            <div className="flex flex-col gap-3">
+              <h2 className="display text-4xl sm:text-5xl">Call #{selected.id}</h2>
+              <p className="text-muted-foreground">Agent: {selected.agent} · {selected.duration} · {selected.scorecard}</p>
+            </div>
+            <div className="flex items-center gap-4">
+              <p className="display text-4xl tabular-nums sm:text-5xl">
+                <span className={cn(status === "red" && "text-destructive")}>{score}</span>
+                <span className="text-muted-foreground"> / 100</span>
+              </p>
+              <StatusBadge status={status}>{STATUS_LABEL[status]}</StatusBadge>
+            </div>
+          </div>
+          <audio ref={audioRef} controls className="mt-10 w-full" />
+          <p className="label mt-3 text-muted-foreground">Demo transcripts are built-in. Uploaded files play here after upload; click any timestamp to seek.</p>
+          <div className="mt-16 grid gap-x-10 gap-y-16 lg:grid-cols-12">
+            <div className="lg:col-span-7">
+              <h3 className="mb-5 text-xl font-medium tracking-tight">Transcript (PII redacted)</h3>
+              <ul className="border-b border-border">
+                {selected.lines.map((l, i) => (
+                  <li key={i} className="grid grid-cols-[3rem_4.5rem_1fr] items-baseline gap-x-3 border-t border-border py-3">
+                    <button className="label text-left text-muted-foreground underline underline-offset-4 transition-colors duration-200 hover:text-primary" onClick={() => seek(l.time, queue[0]?.url)}>{l.time}</button>
+                    <span className="label">{l.speaker}</span>
+                    <span className="max-w-[60ch]">{redactPII(l.text)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="lg:col-span-5">
+              <h3 className="mb-5 text-xl font-medium tracking-tight">Scorecard</h3>
+              <ul className="border-b border-border">
+                {checks.map((c) => {
+                  const r = selected.results.find((x) => x.check_id === c.id);
+                  const verdict = VERDICTS[!r || r.verdict === "not_applicable" ? "na" : r.verdict === "pass" ? "pass" : c.critical ? "critical" : "fail"];
+                  return (
+                    <li key={c.id} className="flex items-start gap-3 border-t border-border py-3 text-sm leading-relaxed">
+                      <span className={cn("flex w-20 shrink-0 items-center gap-1.5 font-medium", verdict.className)}>
+                        <verdict.icon aria-hidden className="size-3.5" />
+                        {verdict.label}
+                      </span>
+                      <span className="flex-1">{c.label} <span className="text-muted-foreground tabular-nums">({c.weight})</span></span>
+                      {r?.timestamp && <span className="text-muted-foreground">{r.timestamp}</span>}
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="mt-8 flex flex-wrap gap-2">
+                <Button variant="secondary">Confirm flag</Button>
+                <Button variant="outline">Dismiss</Button>
+                <Button onClick={() => exportCSV(selected)}>Export</Button>
+              </div>
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="scorecards" className={cn(PANEL, SECTION)}>
+          <div className="flex flex-col gap-5 lg:col-span-5">
+            <h2 className={HEADING}>4 · Scorecard editor — Bank Support v2</h2>
+            <p className="max-w-[48ch] text-muted-foreground">Preset from spec §08. Total must equal 100. Stored in IndexedDB (Dexie) — persistence TODO.</p>
+          </div>
+          <div className="lg:col-span-7">
+            <ul>
               {checks.map((c) => (
-                <li key={c.id} className="flex items-center gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm">
-                  <span className="flex-1 font-medium">{c.label}</span>
-                  <label className="flex items-center gap-1 text-xs">weight
-                    <input type="number" value={c.weight} min={0} max={100}
-                      onChange={(e) => setChecks((ps) => ps.map((x) => x.id === c.id ? { ...x, weight: Number(e.target.value) } : x))}
-                      className="w-16 rounded border px-1 py-0.5" />
-                  </label>
-                  <label className="flex items-center gap-1 text-xs">critical
-                    <input type="checkbox" checked={c.critical}
-                      onChange={(e) => setChecks((ps) => ps.map((x) => x.id === c.id ? { ...x, critical: e.target.checked } : x))} />
-                  </label>
+                <li key={c.id} className="flex flex-wrap items-center justify-between gap-x-8 gap-y-3 border-t border-border py-4">
+                  <span className="min-w-0 flex-1 basis-64 font-medium">{c.label}</span>
+                  <div className="flex items-center gap-6">
+                    <Field orientation="horizontal" className="w-auto">
+                      <FieldLabel htmlFor={`weight-${c.id}`}>Weight</FieldLabel>
+                      <Input id={`weight-${c.id}`} type="number" value={c.weight} min={0} max={100}
+                        onChange={(e) => setChecks((ps) => ps.map((x) => x.id === c.id ? { ...x, weight: Number(e.target.value) } : x))}
+                        className="w-20" />
+                    </Field>
+                    <Field orientation="horizontal" className="w-auto">
+                      <Checkbox id={`critical-${c.id}`} checked={c.critical}
+                        onCheckedChange={(v) => setChecks((ps) => ps.map((x) => x.id === c.id ? { ...x, critical: v } : x))} />
+                      <FieldLabel htmlFor={`critical-${c.id}`}>Critical</FieldLabel>
+                    </Field>
+                  </div>
                 </li>
               ))}
             </ul>
-            <p className="mt-2 text-sm font-bold">Total: {checks.reduce((a, c) => a + c.weight, 0)} / 100</p>
-          </section>
-        )}
+            <p className={cn("border-t border-foreground pt-5 text-xl font-medium tracking-tight", total !== 100 && "text-destructive")}>Total: <span className="tabular-nums">{total} / 100</span></p>
+          </div>
+        </TabsContent>
 
-        {tab === "agents" && (
-          <section className="rounded-2xl bg-white p-6 text-slate-900">
-            <h2 className="text-xl font-bold">5 · Agent dashboard (stretch)</h2>
-            <p className="text-sm text-slate-500">Deferred until MVP works end-to-end. Planned: score trend per agent, most-missed checks, auto coaching notes.</p>
-          </section>
-        )}
+        <TabsContent value="agents" className={cn(PANEL, SECTION)}>
+          <h2 className={cn(HEADING, "lg:col-span-5")}>5 · Agent dashboard (stretch)</h2>
+          <p className="max-w-[48ch] text-muted-foreground lg:col-span-7">Deferred until MVP works end-to-end. Planned: score trend per agent, most-missed checks, auto coaching notes.</p>
+        </TabsContent>
 
-        {tab === "export" && (
-          <section className="rounded-2xl bg-white p-6 text-slate-900">
-            <h2 className="text-xl font-bold">6 · Export (redacted)</h2>
-            <p className="text-sm text-slate-500">Card numbers, emails and PH mobiles are redacted via regex + Luhn. Names/addresses LLM pass is AI-phase TODO.</p>
-            <div className="mt-4 flex gap-2">
+        <TabsContent value="export" className={cn(PANEL, SECTION)}>
+          <h2 className={cn(HEADING, "lg:col-span-5")}>6 · Export (redacted)</h2>
+          <div className="flex flex-col gap-8 lg:col-span-7">
+            <p className="max-w-[48ch] text-muted-foreground">Card numbers, emails and PH mobiles are redacted via regex + Luhn. Names/addresses LLM pass is AI-phase TODO.</p>
+            <div className="flex flex-wrap gap-2">
               {calls.map((c) => (
-                <button key={c.id} onClick={() => exportCSV(c)} className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">Call #{c.id} CSV</button>
+                <Button key={c.id} variant="outline" onClick={() => exportCSV(c)}>Call #{c.id} CSV</Button>
               ))}
             </div>
-          </section>
-        )}
+          </div>
+        </TabsContent>
       </main>
-    </div>
+    </Tabs>
   );
 }

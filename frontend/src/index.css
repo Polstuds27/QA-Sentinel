@@ -1,6 +1,148 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/schibsted-grotesk";
 
-body {
-  background: #0a1628;
-  color: #e2e8f0;
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: 'Schibsted Grotesk Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-sans);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-cobalt: var(--cobalt);
+  --radius-sm: var(--radius);
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius);
+  --radius-xl: var(--radius);
+  --radius-2xl: var(--radius);
+  --radius-3xl: var(--radius);
+  --radius-4xl: var(--radius);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-hang: hang 0.6s var(--ease-out-expo) backwards;
+
+  @keyframes hang {
+    from {
+      opacity: 0;
+      transform: translateY(0.75rem);
+    }
+  }
+}
+
+/* Gallery White (DESIGN.md): an off-white wall, black type, cobalt as the only accent. */
+:root {
+  color-scheme: light;
+  --background: #fafaf8;
+  --foreground: #111111;
+  --card: var(--background);
+  --card-foreground: var(--foreground);
+  --popover: var(--background);
+  --popover-foreground: var(--foreground);
+  --primary: #1d3fd1;
+  --primary-foreground: #ffffff;
+  --secondary: #111111;
+  --secondary-foreground: #fafaf8;
+  --muted: #f0f0ec;
+  --muted-foreground: #5d5d58;
+  --accent: var(--muted);
+  --accent-foreground: var(--foreground);
+  --destructive: #b3261e;
+  --border: #dcdcd8;
+  --input: var(--border);
+  --ring: var(--primary);
+  --radius: 0;
+  /* Fixed inks: these do not change in dark mode. */
+  --paper: #ffffff;
+  --ink: #111111;
+  --cobalt: #1d3fd1;
+}
+
+.dark {
+  color-scheme: dark;
+  --background: #0e0e0e;
+  --foreground: #f2f2ef;
+  --primary: #7d97ff;
+  --primary-foreground: #0e0e0e;
+  --secondary: #f2f2ef;
+  --secondary-foreground: #0e0e0e;
+  --muted: #1a1a19;
+  --muted-foreground: #a5a5a0;
+  --destructive: #ff8a80;
+  --border: #2c2c2a;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    @apply font-sans;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    line-height: 1.625;
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  p,
+  li {
+    text-wrap: pretty;
+  }
+  ::selection {
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  input,
+  textarea {
+    caret-color: var(--primary);
+  }
+  audio {
+    accent-color: var(--primary);
+  }
+}
+
+@utility display {
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.035em;
+}
+
+@utility label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
 }
