@@ -1,4 +1,7 @@
-# AGENTS.md — QA Sentinel
+# AGENTS.md — Linya
+
+Linya (Filipino for "line") was called QA Sentinel until Oct 9, 2026. The concept PDF, the
+repo folder and the hackathon form draft still use the old name; use Linya everywhere new.
 
 Local-AI call-center QA (AppBuildersPH Hackathon 2026, Local AI track): batch-upload
 call recordings, transcribe + score + flag every call on-device, export redacted reports.
@@ -15,9 +18,15 @@ Submission due 10:00 AM Oct 10 — working product over slides.
   match. Imports use the `@/` alias (`@/components/ui/button`, `@/lib/utils`).
 - `frontend/src/index.css` — all colour tokens (`:root` and `.dark`); dark mode follows the
   system setting via `main.tsx`.
+- `frontend/src/components/logo.tsx` — the Linya logo (an L with a cobalt dot, plus the
+  wordmark). PNG exports and the favicon are in `frontend/public/` (`logo.png`,
+  `logo-dark.png`, `logo-mark.png`, `favicon.svg`).
+- `frontend/src/components/audio-player.tsx` — custom player for call detail: hairline
+  track, cobalt playhead, a tick at each flagged timestamp. Plain `<audio>` underneath;
+  `wavesurfer.js` is still unwired.
 - `frontend/src/mock.ts` — 3 demo calls (clean, critical #147 62/100 RED, borderline).
 - `frontend/src/lib/` — `scorecard.ts` (Bank Support v2 preset + scorer), `pii.ts`
-  (regex + Luhn redaction only), `db.ts` (Dexie `qa-sentinel` schema, persistence TODO).
+  (regex + Luhn redaction only), `db.ts` (Dexie `linya` schema, persistence TODO).
 - No backend, no AI workers yet. `dexie`/`wavesurfer.js`/`recharts`/`jspdf` are installed
   but unwired. Do NOT add `transformers.js` / WebLLM / Ollama until the AI phase starts;
   when it does, follow the plan below.

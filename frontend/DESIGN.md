@@ -1,5 +1,5 @@
 ---
-name: QA Sentinel
+name: Linya
 description: Gallery White. An off-white wall, black type and one cobalt accent, applied to a call QA tool.
 colors:
   background: "#fafaf8"
@@ -91,7 +91,7 @@ components:
     padding: "0 12px"
 ---
 
-# Design System: QA Sentinel
+# Design System: Linya
 
 The source of truth for every value here is `src/index.css` and the components in `src/components/ui/`. If this file and the code disagree, the code is right and this file needs updating.
 
@@ -101,11 +101,20 @@ Gallery White treats the page as a gallery wall. The wall is off-white and almos
 
 The direction was set in these words: minimalist, lots of white space, mostly black and white with one accent colour, clean sans-serif type, no heavy shadows or gradients. Treat that as binding.
 
-The concept PDF (`QA-Sentinel-Concept.pdf`) draws the app in navy and teal with all-caps monospace labels and red, amber and green pills. That look is superseded by this file. The PDF still decides what is on each screen.
+The concept PDF (`QA-Sentinel-Concept.pdf`, written under the product's earlier name) draws the app in navy and teal with all-caps monospace labels and red, amber and green pills. That look is superseded by this file. The PDF still decides what is on each screen.
 
 Dark mode is the same gallery after hours: a near-black wall, off-white type, and a lighter cobalt. It follows the system setting (`src/main.tsx`); there is no toggle.
 
 QA analysts use this at a desk, working through a batch of calls. Scanning and density matter more than display: this is a tool, so headings are smaller and gaps tighter than a marketing page would use.
+
+## Logo
+
+Linya is Filipino for "line". The mark is two heavy lines meeting as a square-cornered L, with one cobalt dot in the open corner. The lines are the call; the dot is the moment on it worth hearing. The dot never touches the lines.
+
+- **Geometry:** on a 24-unit square, the L is 4 units thick and runs from 3 to 21 on both axes. The dot is 8 units across, centred at (15.5, 8.5), which leaves a 4.5-unit gap to each line.
+- **In the app:** `Logo` in `src/components/logo.tsx`. The mark is a 1.5rem square with the L in `--foreground` and the dot in `--primary`; the wordmark is "Linya" at `text-xl`, weight 600, `tracking-tight`, in sentence case. Both follow the theme.
+- **Files** (in `public/`): `logo.png` is the mark and wordmark on a transparent background for light surfaces; `logo-dark.png` is the same in off-white with the lighter cobalt for dark surfaces; `logo-mark.png` is the mark alone on a 512px square of the wall colour, for avatars and social posts; `favicon.svg` is the mark for the browser tab.
+- **Rules:** the dot is always cobalt and there is only one. Do not let it touch or overlap the L, round the L's corners, tilt the mark, or set the wordmark in capitals. Keep clear space of at least the dot's width around the logo.
 
 ## Colors
 
@@ -224,6 +233,15 @@ shadcn/ui components (Base UI, `base-nova`) live in `src/components/ui/` and hav
 ### Navigation
 
 **Tabs** are text labels on a hairline. Each trigger has a small dot and `text-muted-foreground`; the active one turns foreground, gets a 1px cobalt underline, and its dot fills cobalt. `TabsTrigger` draws the dot itself.
+
+### Audio player
+
+`AudioPlayer` in `src/components/audio-player.tsx` replaces the browser's audio controls. It is the call drawn as a line, between two hairlines.
+
+- **Track:** `Slider` is a 1px hairline. The played part darkens to foreground and the playhead is a `size-3` cobalt dot that grows slightly on hover and drag.
+- **Flag ticks:** every failed check with a timestamp gets a 1px destructive tick standing on the line at that moment. A tick grows on hover and focus, and clicking it plays from there.
+- **Controls:** an outline icon button for play and pause on the left, a ghost icon button for mute on the right, and the current time and duration as `label` text either side of the track.
+- **No recording yet:** the controls are disabled and the dot turns muted, but the line still shows the call's length and where its flags are.
 
 ### Call rows and the drop zone
 

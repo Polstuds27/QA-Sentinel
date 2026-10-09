@@ -21,7 +21,7 @@ class QADb extends Dexie {
   calls!: Table<CallRecord, string>;
   transcripts!: Table<TranscriptLine, number>;
   constructor() {
-    super("qa-sentinel");
+    super("linya");
     this.version(1).stores({
       calls: "id, agent, scorecard",
       transcripts: "++id, callId",

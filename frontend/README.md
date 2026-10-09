@@ -1,4 +1,4 @@
-# QA Sentinel — frontend (UI shell, no AI yet)
+# Linya — frontend (UI shell, no AI yet)
 
 Local AI call-center QA. This step scaffolds only the frontend UI shell from the
 hackathon spec. No speech-to-text, no LLM scoring, no backend — those are planned
@@ -34,7 +34,7 @@ npm run lint    # oxlint
   red <70, any critical fail forces red; N/A checks excluded and scaled)
 - `src/lib/pii.ts` — deterministic redaction only (card regex + Luhn, email, PH mobile).
   LLM name/address pass is TODO in the AI phase.
-- `src/lib/db.ts` — Dexie `qa-sentinel` schema (calls, transcripts). Persistence wiring TODO.
+- `src/lib/db.ts` — Dexie `linya` schema (calls, transcripts). Persistence wiring TODO.
 
 ## Explicitly NOT started (AI/backend phase)
 

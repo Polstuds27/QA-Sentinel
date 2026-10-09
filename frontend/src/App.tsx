@@ -7,6 +7,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { AudioPlayer } from "@/components/audio-player";
+import { Logo } from "@/components/logo";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DEMO_CALLS, demoScore, type DemoCall } from "./mock";
 import { BANK_SUPPORT_V2, scoreCall, type CallStatus, type Check } from "./lib/scorecard";
@@ -108,6 +110,14 @@ export default function App() {
     { id: "export", label: "Export" },
   ];
 
+  const flagMarkers = selected.results
+    .filter((r) => r.verdict === "fail" && r.timestamp)
+    .map((r) => ({
+      ts: r.timestamp!,
+      seconds: toSeconds(r.timestamp!),
+      label: checks.find((c) => c.id === r.check_id)?.label ?? r.check_id,
+    }));
+
   const total = checks.reduce((a, c) => a + c.weight, 0);
 
   return (
@@ -115,7 +125,7 @@ export default function App() {
       <header className="sticky top-0 z-10 bg-background">
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-x-10 px-5 sm:px-8 md:h-16 md:flex-row md:items-center md:justify-between">
           <div className="flex h-14 min-w-0 items-center gap-4">
-            <span className="shrink-0 text-lg font-semibold tracking-tight">QA Sentinel</span>
+            <Logo className="shrink-0" />
             <span className="label flex min-w-0 items-center gap-2 text-muted-foreground">
               <span aria-hidden className="size-2 shrink-0 rounded-full bg-foreground" />
               <span className="truncate">Offline ready (UI shell — AI pipeline not wired yet)</span>
@@ -223,7 +233,15 @@ export default function App() {
               <StatusBadge status={status}>{STATUS_LABEL[status]}</StatusBadge>
             </div>
           </div>
-          <audio ref={audioRef} controls className="mt-10 w-full" />
+          <div className="mt-10">
+            <AudioPlayer
+              audioRef={audioRef}
+              src={queue[0]?.url}
+              fallbackDuration={toSeconds(selected.duration)}
+              markers={flagMarkers}
+              onMarkerClick={(m) => seek(m.ts, queue[0]?.url)}
+            />
+          </div>
           <p className="label mt-3 text-muted-foreground">Demo transcripts are built-in. Uploaded files play here after upload; click any timestamp to seek.</p>
           <div className="mt-16 grid gap-x-10 gap-y-16 lg:grid-cols-12">
             <div className="lg:col-span-7">
