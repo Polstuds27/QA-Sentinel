@@ -1,4 +1,5 @@
 import Dexie, { type Table } from "dexie";
+import type { Check } from "./scorecard";
 
 export interface CallRecord {
   id: string;
@@ -7,24 +8,65 @@ export interface CallRecord {
   scorecard: string;
   audioUrl?: string;
   fileName?: string;
+  source: "demo" | "ai";
+  coaching?: string;
+  createdAt: number;
 }
 
-export interface TranscriptLine {
+export interface TranscriptRow {
   id?: number;
   callId: string;
   time: string;
-  speaker: "Agent" | "Customer";
+  speaker: string;
   text: string;
+}
+
+export interface ResultRow {
+  id?: number;
+  callId: string;
+  check_id: string;
+  verdict: string;
+  severity: string;
+  speaker?: string;
+  timestamp?: string;
+  evidence?: string;
+  reason?: string;
+}
+
+export interface OverrideRow {
+  id?: number;
+  callId: string;
+  check_id: string;
+  verdict: string;
+  decidedAt: number;
+}
+
+export interface ScorecardRow {
+  id: string;
+  name: string;
+  checks: Check[];
+  updatedAt: number;
 }
 
 class QADb extends Dexie {
   calls!: Table<CallRecord, string>;
-  transcripts!: Table<TranscriptLine, number>;
+  transcripts!: Table<TranscriptRow, number>;
+  results!: Table<ResultRow, number>;
+  overrides!: Table<OverrideRow, number>;
+  scorecards!: Table<ScorecardRow, string>;
   constructor() {
-    super("linya");
+    // Keeps its pre-rename name so calls already stored on a machine are not orphaned.
+    super("qa-sentinel");
     this.version(1).stores({
       calls: "id, agent, scorecard",
       transcripts: "++id, callId",
+    });
+    this.version(2).stores({
+      calls: "id, agent, source",
+      transcripts: "++id, callId",
+      results: "++id, callId, check_id",
+      overrides: "++id, callId, check_id",
+      scorecards: "id",
     });
   }
 }

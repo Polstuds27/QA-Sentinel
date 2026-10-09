@@ -2,7 +2,7 @@ import { BANK_SUPPORT_V2, scoreCall, type CheckResult } from "./lib/scorecard";
 
 export interface TranscriptLine {
   time: string;
-  speaker: "Agent" | "Customer";
+  speaker: string;
   text: string;
 }
 

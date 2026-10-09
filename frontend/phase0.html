@@ -1,0 +1,60 @@
+<!doctype html>
+<html>
+  <head><meta charset="utf-8" /><title>phase0-webllm</title></head>
+  <body>
+    <div id="r">STARTING</div>
+    <script type="module">
+      import { CreateMLCEngine } from "@mlc-ai/web-llm";
+      const el = document.getElementById("r");
+      const log = [];
+      const say = (s) => { log.push(new Date().toISOString().slice(11, 19) + " " + s); el.textContent = log.join(" | "); };
+      try {
+        const TRANSCRIPT = [
+          '[00:03] Agent: "Thank you for calling, this is Jason."',
+          '[01:58] Agent: "Sure! What is the card number?"',
+          '[02:13] Agent: "Okay, so that is 4 1 1 1, 1 1 1 1, 1 1 1 1, 1 1 1 1, right?"',
+        ].join("\n");
+        const t0 = performance.now();
+        const model = new URLSearchParams(location.search).get("m") || "Qwen2.5-0.5B-Instruct-q4f16_1-MLC";
+        say("LOADING_MODEL " + model);
+        const engine = await CreateMLCEngine(model, {
+          logLevel: "SILENT",
+          initProgressCallback: (p) => say("LOADING_MODEL " + Math.round((p.progress ?? 0) * 100) + "%"),
+        });
+        const loadS = ((performance.now() - t0) / 1000).toFixed(1);
+        const t1 = performance.now();
+        const reply = await engine.chat.completions.create({
+          temperature: 0,
+          messages: [
+            {
+              role: "system",
+              content:
+                "You score call-center calls. Reply with a single JSON object and nothing else: " +
+                '{"check_id": string, "verdict": "pass" | "fail" | "not_applicable", "timestamp": string, "evidence": string, "reason": string}. ' +
+                "evidence must be an exact quote from the transcript.",
+            },
+            {
+              role: "user",
+              content: "Check no_card_readback: the agent must never read back a full card number. Transcript:\n" + TRANSCRIPT,
+            },
+          ],
+        });
+        const scoreS = ((performance.now() - t1) / 1000).toFixed(1);
+        const raw = reply.choices[0]?.message?.content ?? "";
+        let guard = "PARSE_FAIL";
+        try {
+          const parsed = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1));
+          const ok =
+            typeof parsed.evidence === "string" &&
+            TRANSCRIPT.toLowerCase().includes(parsed.evidence.toLowerCase().replace(/["[\]]/g, ""));
+          guard = `verdict=${parsed.verdict} timestamp=${parsed.timestamp} quote-exists=${ok ? "PASS" : "REJECT"}`;
+        } catch { guard = "JSON_PARSE_FAIL"; }
+        document.title = "PHASE0_DONE";
+        say(`DONE loadS=${loadS} scoreS=${scoreS} guard=${guard} raw=${raw}`);
+      } catch (e) {
+        document.title = "PHASE0_ERROR";
+        say("ERROR " + (e?.message ?? e));
+      }
+    </script>
+  </body>
+</html>

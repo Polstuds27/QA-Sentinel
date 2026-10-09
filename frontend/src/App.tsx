@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { CheckIcon, MinusIcon, XIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -10,17 +11,27 @@ import { Input } from "@/components/ui/input";
 import { AudioPlayer } from "@/components/audio-player";
 import { Logo } from "@/components/logo";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DEMO_CALLS, demoScore, type DemoCall } from "./mock";
+import { DEMO_CALLS, type DemoCall } from "./mock";
+import { isAIEnabled, runLocalPipeline, setAIEnabled, type PipelineProgress } from "./ai/pipeline";
+import { getBackend } from "./ai/backend";
+import { generateCoachingNote } from "./ai/coaching";
 import { BANK_SUPPORT_V2, scoreCall, type CallStatus, type Check } from "./lib/scorecard";
 import { redactPII } from "./lib/pii";
+import { getCoaching, getScorecard, loadAICalls, saveAICall, saveCoaching, saveScorecard, setOverride } from "./lib/store";
+import { downloadCSV, exportPDF } from "./lib/export";
+import { agentStats } from "./lib/agents";
 
 type Tab = "calls" | "detail" | "scorecards" | "agents" | "export";
 
 interface QueueItem {
+  id: number;
   name: string;
-  status: "queued" | "ready";
+  status: string;
   url: string;
+  file: File;
 }
+
+let queueSeq = 0;
 
 function toSeconds(ts: string): number {
   const [m, s] = ts.split(":").map(Number);
@@ -53,12 +64,22 @@ export default function App() {
   const [checks, setChecks] = useState<Check[]>(BANK_SUPPORT_V2);
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [flaggedOnly, setFlaggedOnly] = useState(false);
+  const [aiOn, setAiOn] = useState(isAIEnabled());
+  const [aiChecking, setAiChecking] = useState(false);
+  const [aiError, setAiError] = useState("");
+  const [aiCalls, setAiCalls] = useState<DemoCall[]>([]);
+  const [coaching, setCoaching] = useState<Record<string, string>>({});
+  const [coachingBusy, setCoachingBusy] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  const calls: DemoCall[] = useMemo(() => DEMO_CALLS, []);
+  useEffect(() => {
+    void loadAICalls().then(setAiCalls).catch(() => {});
+    void getScorecard().then(setChecks).catch(() => {});
+  }, []);
+
+  const calls: DemoCall[] = useMemo(() => [...aiCalls, ...DEMO_CALLS], [aiCalls]);
   const selected = calls.find((c) => c.id === selectedId) ?? calls[0];
   const { score, status } = scoreCall(checks, selected.results);
-  void demoScore;
 
   const visible = calls.filter((c) => {
     if (!flaggedOnly) return true;
@@ -68,11 +89,108 @@ export default function App() {
   function onFiles(files: FileList | null) {
     if (!files) return;
     const items: QueueItem[] = [...files].map((f) => ({
+      id: ++queueSeq,
       name: f.name,
       status: "ready",
       url: URL.createObjectURL(f),
+      file: f,
     }));
     setQueue((q) => [...items, ...q]);
+  }
+
+  async function toggleAI(on: boolean) {
+    setAiError("");
+    if (!on) {
+      setAiOn(false);
+      setAIEnabled(false);
+      return;
+    }
+    setAiChecking(true);
+    const backend = getBackend();
+    const ok = await backend.check();
+    setAiChecking(false);
+    if (!ok) {
+      setAiError(`${backend.label} not reachable — start the backend first (Ollama: \`ollama serve\`).`);
+      return;
+    }
+    setAiOn(true);
+    setAIEnabled(true);
+  }
+
+  function patchQueue(id: number, status: string) {
+    setQueue((q) => q.map((item) => (item.id === id ? { ...item, status } : item)));
+  }
+
+  async function runAI(item: QueueItem) {
+    setAiError("");
+    const onStage = (p: PipelineProgress) => patchQueue(item.id, `${p.stage}: ${p.detail}`);
+    try {
+      onStage({ stage: "decoding", detail: "starting" });
+      const out = await runLocalPipeline(item.file, checks, onStage);
+      const call: DemoCall = {
+        id: `ai-${item.id}`,
+        agent: "Uploaded call",
+        duration: out.duration,
+        scorecard: "Bank Support v2",
+        lines: out.lines,
+        results: out.results,
+      };
+      await saveAICall(call);
+      setAiCalls((cs) => [call, ...cs.filter((c) => c.id !== call.id)]);
+      patchQueue(item.id, "done — open in Calls list below");
+      setSelectedId(call.id);
+    } catch (e) {
+      patchQueue(item.id, "ready");
+      setAiError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function overrideVerdict(callId: string, checkId: string, verdict: "pass" | "fail") {
+    setAiCalls((cs) =>
+      cs.map((c) =>
+        c.id === callId
+          ? { ...c, results: c.results.map((r) => (r.check_id === checkId ? { ...r, verdict } : r)) }
+          : c,
+      ),
+    );
+    if (callId.startsWith("ai-")) {
+      await setOverride(callId, checkId, verdict).catch((e: unknown) =>
+        setAiError(e instanceof Error ? e.message : String(e)),
+      );
+    }
+  }
+
+  async function makeCoachingNote() {
+    if (!aiOn) {
+      setAiError("Flip Local AI on first — coaching notes come from the local model.");
+      return;
+    }
+    setCoachingBusy(true);
+    try {
+      const labelOf = (id: string) => checks.find((c) => c.id === id)?.label ?? id;
+      const failures = selected.results
+        .filter((r) => r.verdict === "fail")
+        .map((r) => ({ label: labelOf(r.check_id), evidence: r.evidence, timestamp: r.timestamp }));
+      const strengths = selected.results
+        .filter((r) => r.verdict === "pass")
+        .map((r) => labelOf(r.check_id));
+      const note = await generateCoachingNote(selected.agent, failures, strengths);
+      setCoaching((m) => ({ ...m, [selected.id]: note }));
+      if (selected.id.startsWith("ai-")) await saveCoaching(selected.id, note);
+    } catch (e) {
+      setAiError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setCoachingBusy(false);
+    }
+  }
+
+  async function openCall(callId: string) {
+    setSelectedId(callId);
+    setTab("detail");
+    if (!coaching[callId] && callId.startsWith("ai-")) {
+      const saved = await getCoaching(callId).catch(() => "");
+      if (saved) setCoaching((m) => ({ ...m, [callId]: saved }));
+    }
   }
 
   function seek(ts: string, url?: string) {
@@ -84,22 +202,7 @@ export default function App() {
   }
 
   function exportCSV(call: DemoCall) {
-    const rows = [
-      ["call_id", "agent", "check_id", "verdict", "timestamp", "evidence_redacted"],
-      ...call.results.map((r) => [
-        call.id,
-        call.agent,
-        r.check_id,
-        r.verdict,
-        r.timestamp ?? "",
-        `"${redactPII(r.evidence ?? "").replace(/"/g, "'")}"`,
-      ]),
-    ];
-    const blob = new Blob([rows.map((r) => r.join(",")).join("\n")], { type: "text/csv" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `qa-call-${call.id}-redacted.csv`;
-    a.click();
+    downloadCSV(call);
   }
 
   const tabs: { id: Tab; label: string }[] = [
@@ -110,8 +213,10 @@ export default function App() {
     { id: "export", label: "Export" },
   ];
 
-  // A demo call plays its own recording; otherwise fall back to the latest upload.
-  const audioUrl = selected.audio ?? queue[0]?.url;
+  // A demo call plays its own recording; an analysed upload plays the file it came from.
+  const audioUrl = selected.audio ?? queue.find((q) => `ai-${q.id}` === selected.id)?.url ?? queue[0]?.url;
+  const save = (next: Check[]) => { setChecks(next); void saveScorecard(next).catch(() => {}); };
+  const stats = agentStats(calls, checks);
 
   const flagMarkers = selected.results
     .filter((r) => r.verdict === "fail" && r.timestamp)
@@ -131,8 +236,19 @@ export default function App() {
             <Logo className="shrink-0" />
             <span className="label flex min-w-0 items-center gap-2 text-muted-foreground">
               <span aria-hidden className="size-2 shrink-0 rounded-full bg-foreground" />
-              <span className="truncate">Offline ready (UI shell — AI pipeline not wired yet)</span>
+              <span className="truncate">{aiOn ? "Local AI on (Whisper + Ollama 3B)" : "Offline ready (UI shell — mock data)"}</span>
             </span>
+            <label className="label flex shrink-0 cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                data-testid="ai-toggle"
+                checked={aiOn}
+                disabled={aiChecking}
+                onChange={(e) => void toggleAI(e.target.checked)}
+                className="size-4 cursor-pointer appearance-none border border-foreground transition-colors duration-200 checked:border-primary checked:bg-primary disabled:opacity-50"
+              />
+              Local AI{aiChecking ? "…" : ""}
+            </label>
           </div>
           <nav className="-mx-5 shrink-0 overflow-x-auto px-5 sm:-mx-8 sm:px-8 md:mx-0 md:px-0">
             <TabsList className="w-max min-w-full">
@@ -153,14 +269,22 @@ export default function App() {
             <div className="flex flex-col gap-6 lg:col-span-7">
               <label className="relative flex min-h-48 cursor-pointer items-center justify-center border border-dashed border-muted-foreground p-8 text-center transition-colors duration-200 hover:border-foreground has-focus-visible:border-foreground has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-ring">
                 <span className="max-w-[38ch] font-medium">Drop MP3 / WAV / M4A here or click to browse (batch)</span>
-                <input type="file" accept="audio/*,.mp3,.wav,.m4a" multiple className="absolute inset-0 cursor-pointer opacity-0" onChange={(e) => onFiles(e.target.files)} />
+                <input type="file" data-testid="upload" accept="audio/*,.mp3,.wav,.m4a" multiple className="absolute inset-0 cursor-pointer opacity-0" onChange={(e) => onFiles(e.target.files)} />
               </label>
+              {aiError && <p role="alert" className="border border-destructive px-4 py-3 text-sm text-destructive">{aiError}</p>}
               {queue.length > 0 && (
                 <ul className="border-b border-border">
-                  {queue.map((q, i) => (
-                    <li key={i} className="flex flex-wrap justify-between gap-x-6 gap-y-1 border-t border-border py-3 text-sm">
+                  {queue.map((q) => (
+                    <li key={q.id} className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-t border-border py-3 text-sm">
                       <span className="min-w-0 font-medium break-words">{q.name}</span>
-                      <span className="text-muted-foreground">{q.status} (transcription TODO — AI phase)</span>
+                      <span className="flex items-center gap-4">
+                        <span data-testid={`queue-status-${q.id}`} className="text-muted-foreground">{q.status}</span>
+                        {aiOn && q.status === "ready" && (
+                          <Button size="sm" data-testid={`transcribe-${q.id}`} onClick={() => void runAI(q)}>
+                            Transcribe &amp; score
+                          </Button>
+                        )}
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -192,7 +316,8 @@ export default function App() {
                     return (
                       <li key={c.id} className="border-t border-border">
                         <button
-                          onClick={() => { setSelectedId(c.id); setTab("detail"); }}
+                          data-testid={`call-${c.id}`}
+                          onClick={() => void openCall(c.id)}
                           className="group flex w-full flex-wrap items-center justify-between gap-x-6 gap-y-3 py-6 text-left"
                         >
                           <span className="flex items-start gap-3">
@@ -245,7 +370,7 @@ export default function App() {
               onMarkerClick={(m) => seek(m.ts, audioUrl)}
             />
           </div>
-          <p className="label mt-3 text-muted-foreground">Sample recording with computer-generated voices; the transcript and scores are scripted. Click any timestamp or flag tick to play from there.</p>
+          <p className="label mt-3 text-muted-foreground">{selected.audio ? "Sample recording with computer-generated voices; the transcript and scores are scripted." : "Transcribed and scored on this machine."} Click any timestamp or flag tick to play from there.</p>
           <div className="mt-16 grid gap-x-10 gap-y-16 lg:grid-cols-12">
             <div className="lg:col-span-7">
               <h3 className="mb-5 text-xl font-medium tracking-tight">Transcript (PII redacted)</h3>
@@ -266,21 +391,40 @@ export default function App() {
                   const r = selected.results.find((x) => x.check_id === c.id);
                   const verdict = VERDICTS[!r || r.verdict === "not_applicable" ? "na" : r.verdict === "pass" ? "pass" : c.critical ? "critical" : "fail"];
                   return (
-                    <li key={c.id} className="flex items-start gap-3 border-t border-border py-3 text-sm leading-relaxed">
-                      <span className={cn("flex w-20 shrink-0 items-center gap-1.5 font-medium", verdict.className)}>
-                        <verdict.icon aria-hidden className="size-3.5" />
-                        {verdict.label}
-                      </span>
-                      <span className="flex-1">{c.label} <span className="text-muted-foreground tabular-nums">({c.weight})</span></span>
-                      {r?.timestamp && <span className="text-muted-foreground">{r.timestamp}</span>}
+                    <li key={c.id} className="flex flex-col gap-2 border-t border-border py-3 text-sm leading-relaxed">
+                      <div className="flex items-start gap-3">
+                        <span className={cn("flex w-20 shrink-0 items-center gap-1.5 font-medium", verdict.className)}>
+                          <verdict.icon aria-hidden className="size-3.5" />
+                          {verdict.label}
+                        </span>
+                        <span className="flex-1">{c.label} <span className="text-muted-foreground tabular-nums">({c.weight})</span></span>
+                        {r?.timestamp && <span className="text-muted-foreground">{r.timestamp}</span>}
+                      </div>
+                      {r && r.verdict === "fail" && (
+                        <div className="flex items-center gap-2 pl-23">
+                          <span className="label text-muted-foreground">Analyst:</span>
+                          <Button size="xs" variant="secondary" onClick={() => void overrideVerdict(selected.id, c.id, "fail")}>Confirm</Button>
+                          <Button size="xs" variant="outline" onClick={() => void overrideVerdict(selected.id, c.id, "pass")}>Dismiss</Button>
+                        </div>
+                      )}
                     </li>
                   );
                 })}
               </ul>
               <div className="mt-8 flex flex-wrap gap-2">
-                <Button variant="secondary">Confirm flag</Button>
-                <Button variant="outline">Dismiss</Button>
-                <Button onClick={() => exportCSV(selected)}>Export</Button>
+                <Button onClick={() => exportCSV(selected)}>Export CSV</Button>
+                <Button variant="outline" onClick={() => exportPDF(selected, checks)}>Export PDF</Button>
+              </div>
+              <div className="mt-12 flex flex-col items-start gap-4">
+                <h3 className="text-xl font-medium tracking-tight">Coaching note</h3>
+                {coaching[selected.id] ? (
+                  <p className="max-w-[48ch]">“{coaching[selected.id]}”</p>
+                ) : (
+                  <p className="text-muted-foreground">No note yet for this call.</p>
+                )}
+                <Button variant="secondary" disabled={!aiOn || coachingBusy} onClick={() => void makeCoachingNote()}>
+                  {coachingBusy ? "Writing…" : "Generate with local model"}
+                </Button>
               </div>
             </div>
           </div>
@@ -289,7 +433,7 @@ export default function App() {
         <TabsContent value="scorecards" className={cn(PANEL, SECTION)}>
           <div className="flex flex-col gap-5 lg:col-span-5">
             <h2 className={HEADING}>4 · Scorecard editor — Bank Support v2</h2>
-            <p className="max-w-[48ch] text-muted-foreground">Preset from spec §08. Total must equal 100. Stored in IndexedDB (Dexie) — persistence TODO.</p>
+            <p className="max-w-[48ch] text-muted-foreground">Preset from spec §08. Total must equal 100. Edits persist to IndexedDB.</p>
           </div>
           <div className="lg:col-span-7">
             <ul>
@@ -300,12 +444,12 @@ export default function App() {
                     <Field orientation="horizontal" className="w-auto">
                       <FieldLabel htmlFor={`weight-${c.id}`}>Weight</FieldLabel>
                       <Input id={`weight-${c.id}`} type="number" value={c.weight} min={0} max={100}
-                        onChange={(e) => setChecks((ps) => ps.map((x) => x.id === c.id ? { ...x, weight: Number(e.target.value) } : x))}
+                        onChange={(e) => save(checks.map((x) => x.id === c.id ? { ...x, weight: Number(e.target.value) } : x))}
                         className="w-20" />
                     </Field>
                     <Field orientation="horizontal" className="w-auto">
                       <Checkbox id={`critical-${c.id}`} checked={c.critical}
-                        onCheckedChange={(v) => setChecks((ps) => ps.map((x) => x.id === c.id ? { ...x, critical: v } : x))} />
+                        onCheckedChange={(v) => save(checks.map((x) => x.id === c.id ? { ...x, critical: v } : x))} />
                       <FieldLabel htmlFor={`critical-${c.id}`}>Critical</FieldLabel>
                     </Field>
                   </div>
@@ -317,8 +461,48 @@ export default function App() {
         </TabsContent>
 
         <TabsContent value="agents" className={cn(PANEL, SECTION)}>
-          <h2 className={cn(HEADING, "lg:col-span-5")}>5 · Agent dashboard (stretch)</h2>
-          <p className="max-w-[48ch] text-muted-foreground lg:col-span-7">Deferred until MVP works end-to-end. Planned: score trend per agent, most-missed checks, auto coaching notes.</p>
+          <div className="flex flex-col gap-5 lg:col-span-5">
+            <h2 className={HEADING}>5 · Agent dashboard</h2>
+            <p className="max-w-[48ch] text-muted-foreground">Averages and most-missed checks across all calls on this machine.</p>
+          </div>
+          <div className="flex flex-col gap-10 lg:col-span-7">
+            {stats.length === 0 ? (
+              <p>No calls yet.</p>
+            ) : (
+              <>
+                <div className="h-56">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={stats.map((s) => ({ agent: s.agent, avg: s.avg }))} barCategoryGap="35%">
+                      <XAxis dataKey="agent" tick={{ fontSize: 13, fill: "var(--muted-foreground)" }} tickLine={false} axisLine={{ stroke: "var(--border)" }} />
+                      <YAxis domain={[0, 100]} width={32} tick={{ fontSize: 13, fill: "var(--muted-foreground)" }} tickLine={false} axisLine={false} />
+                      <Tooltip
+                        cursor={{ fill: "var(--muted)" }}
+                        contentStyle={{ background: "var(--background)", border: "1px solid var(--foreground)", borderRadius: 0, fontSize: 13 }}
+                        labelStyle={{ color: "var(--foreground)", fontWeight: 500 }}
+                        itemStyle={{ color: "var(--foreground)" }}
+                      />
+                      <Bar dataKey="avg" name="Avg score" fill="var(--foreground)" isAnimationActive={false} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <ul className="border-b border-border">
+                  {stats.map((s) => (
+                    <li key={s.agent} className="flex flex-col gap-1 border-t border-border py-4">
+                      <span>
+                        <span className="font-medium">{s.agent}</span>
+                        <span className="text-muted-foreground"> · {s.calls} call(s) · avg {s.avg} · {s.reds} red</span>
+                      </span>
+                      {s.missed.length > 0 && (
+                        <span className="label text-muted-foreground">
+                          Most missed: {s.missed.map((m) => `${m.label} (×${m.count})`).join("; ")}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
         </TabsContent>
 
         <TabsContent value="export" className={cn(PANEL, SECTION)}>
@@ -327,7 +511,10 @@ export default function App() {
             <p className="max-w-[48ch] text-muted-foreground">Card numbers, emails and PH mobiles are redacted via regex + Luhn. Names/addresses LLM pass is AI-phase TODO.</p>
             <div className="flex flex-wrap gap-2">
               {calls.map((c) => (
-                <Button key={c.id} variant="outline" onClick={() => exportCSV(c)}>Call #{c.id} CSV</Button>
+                <span key={c.id} className="flex gap-1">
+                  <Button variant="outline" onClick={() => exportCSV(c)}>Call #{c.id} CSV</Button>
+                  <Button variant="ghost" onClick={() => exportPDF(c, checks)}>PDF</Button>
+                </span>
               ))}
             </div>
           </div>

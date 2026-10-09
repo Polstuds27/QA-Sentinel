@@ -30,3 +30,21 @@ export function redactPII(text: string): string {
   out = out.replace(/(\+?63[\s-]?|0)9\d{2}[\s-]?\d{3}[\s-]?\d{4}\b/g, "[PHONE]");
   return out;
 }
+
+export interface CardHit {
+  digits: string;
+  last4: string;
+}
+
+// Deterministic card finder (regex + Luhn). Hits spoken by the agent become a
+// critical compliance flag per spec §06 — no LLM judgment needed for this check.
+export function findCardHits(text: string): CardHit[] {
+  const hits: CardHit[] = [];
+  for (const m of text.matchAll(/\b(?:\d[ -]?){13,19}\b/g)) {
+    const digits = m[0].replace(/\D/g, "");
+    if (digits.length >= 13 && digits.length <= 19 && luhnValid(digits)) {
+      hits.push({ digits, last4: digits.slice(-4) });
+    }
+  }
+  return hits;
+}
