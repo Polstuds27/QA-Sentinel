@@ -1,0 +1,36 @@
+{
+  "name": "linya-ads",
+  "version": "1.0.0",
+  "description": "1-minute promo video for Linya",
+  "repository": {},
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "@remotion/captions": "4.0.534",
+    "@remotion/cli": "4.0.534",
+    "@remotion/google-fonts": "4.0.534",
+    "@remotion/install-whisper-cpp": "4.0.534",
+    "@remotion/transitions": "4.0.534",
+    "lucide-react": "1.54.0",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "remotion": "4.0.534"
+  },
+  "devDependencies": {
+    "@remotion/eslint-config-flat": "4.0.534",
+    "@types/react": "19.2.7",
+    "@types/web": "0.0.166",
+    "eslint": "9.39.5",
+    "prettier": "3.8.1",
+    "typescript": "5.9.3"
+  },
+  "scripts": {
+    "dev": "remotion studio",
+    "render": "remotion render LinyaAd out/linya-ad.mp4 --codec=h264",
+    "transcribe": "node scripts/transcribe.mjs",
+    "audio": "node scripts/make-audio.mjs",
+    "build": "remotion bundle",
+    "upgrade": "remotion upgrade",
+    "lint": "eslint src && tsc"
+  }
+}
