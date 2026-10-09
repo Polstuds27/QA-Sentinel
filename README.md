@@ -80,8 +80,8 @@ The scoring model never gives a verdict directly. Each rule is split into yes/no
 asked over only the lines that can answer them; code turns the answers into the verdict
 and the evidence line, and rejects a quote that is not in the transcript.
 
-WebLLM (`@mlc-ai/web-llm`) was tried for in-browser scoring and did not run on our test
-hardware. It is not used.
+WebLLM was tried for in-browser scoring early on and did not run on our test hardware.
+It is not used and not installed.
 
 ## Tools
 
@@ -179,4 +179,4 @@ Without the server, calls are stored in the browser (IndexedDB).
 
 ## Team
 
-Team Busseng: John Patrick Soriaga and Polstuds27.
+Team Busseng: John Patrick Soriaga, Paul Adrianne Mojal, James Ian Antonio and Limuel Camangon.

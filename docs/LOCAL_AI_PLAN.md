@@ -19,7 +19,7 @@ Spec refs: pipeline §06, stack §10, build order §12. Hard rule: no cloud AI A
 | GPUs | Intel UHD 620 (1 GB, Chrome default adapter) + NVIDIA MX150 (2 GB). Below 4 GB spec. |
 | Browsers | Chrome 151, Edge 154 — WebGPU API present |
 | RAM / disk | 16 GB RAM, 68 GB free — fine |
-| A: Whisper base | PASS — 67.5 s local TTS clip (`public/demo-audio/call-sample.wav`) transcribed in 19.0 s CPU (~0.28× realtime), 5/6 keywords hit. `scripts/phase0-whisper.mjs` |
+| A: Whisper base | PASS — 67.5 s local TTS clip (now `samples/call-sample.wav`) transcribed in 19.0 s CPU (~0.28× realtime), 5/6 keywords hit. (The `phase0-*` scripts were removed on Oct 10; they are in git history.) |
 | B: WebLLM 1.5B | BLOCKED — model downloads + caches fine, but Intel iGPU hangs at init (`DXGI_ERROR_DEVICE_HUNG`, device removed). Chrome on Windows ignores `powerPreference`, so MX150 can't be forced from the page. 0.5B hangs identically; SwiftShader exposes no adapter. `phase0.html` + `scripts/phase0-webllm-browser.mjs` |
 | C: Ollama qwen2.5:1.5b (CPU) | PARTIAL — server up, valid JSON, exact evidence quotes, quote-guard PASS, ~6 s/check steady-state (52 s cold). But verdict wrong on `no_card_readback` (says pass 3× despite digit-count rule + PII fact). Critical checks must be decided by the deterministic PII engine (per spec §06), LLM handles soft checks. `scripts/phase0-ollama.mjs` |
 | D: Ollama qwen2.5:3b (CPU) | PASS — correct `fail` + exact quote + `02:13` + sensible reason, 26.4 s cold (steady-state faster). Locked architecture: 3B judges all checks, deterministic PII engine double-decides criticals (instant, reliable). Pre-process demo calls; live-score at most one short call on stage. |
@@ -82,12 +82,12 @@ demo laptop. Still TODO: wavesurfer waveform.
 - This is the only "backend": localhost LLM, no audio upload, no hosted services.
 
 DONE as the primary backend (not optional on this hardware): `src/ai/backend.ts`
-provider abstraction (Ollama live, WebLLM stubbed); `OLLAMA_ORIGINS` set for
+(Ollama only; the WebLLM stub was removed on Oct 10); `OLLAMA_ORIGINS` set for
 `http://localhost:5173`; qwen2.5:3b pulled. Coaching notes via the same model
 (`src/ai/coaching.ts`); per-agent stats (`src/lib/agents.ts`) feed the dashboard.
 
 ## Interfaces (already stubbed)
 
-- `client/src/ai/types.ts` — `TranscriptChunk`, `PipelineJob`, reuses `CheckResult`.
+- `client/src/ai/types.ts` — `TranscriptChunk`.
 - `client/src/ai/pipeline.ts` — `AI_ENABLED = false`; `runLocalPipeline()` throws until
   approved. Flip the flag only when Phase 0 passes on the demo laptop.

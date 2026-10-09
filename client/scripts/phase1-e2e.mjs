@@ -5,7 +5,7 @@ import puppeteer from "puppeteer-core";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-const wav = process.argv[2] ?? fileURLToPath(new URL("../public/demo-audio/call-sample.wav", import.meta.url));
+const wav = process.argv[2] ?? fileURLToPath(new URL("../samples/call-sample.wav", import.meta.url));
 if (!wav || !existsSync(wav)) throw new Error(`wav not found: ${wav}`);
 
 const browser = await puppeteer.launch({

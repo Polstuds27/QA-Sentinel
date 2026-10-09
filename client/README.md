@@ -13,7 +13,6 @@ React 19 + Vite 8 + TypeScript + Tailwind v4, with shadcn/ui components on Base 
 Gallery White system described in `DESIGN.md`. Local backend: Whisper base
 (`@huggingface/transformers`, Web Worker) + Ollama qwen2.5:3b on localhost +
 Dexie (IndexedDB v2). UI libs: `recharts` (dashboard), `jspdf` (PDF export).
-`wavesurfer.js` is installed but unused.
 
 ## Run
 

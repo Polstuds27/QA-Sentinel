@@ -22,7 +22,7 @@ Submission due 10:00 AM Oct 10 — working product over slides.
   really transcribed and scored, and a fresh install starts empty.
 - `client/src/ai/` — working local pipeline: `whisper.ts` + `speech.worker.ts`
   (Whisper base and pyannote speaker separation, Web Worker), `ollama.ts` (qwen2.5:3b scoring), `backend.ts`
-  (provider abstraction: Ollama live, WebLLM stubbed), `coaching.ts` (notes),
+  (the scoring backend: Ollama only), `coaching.ts` (notes),
   `pipeline.ts` (dispatcher, two-tier quote guard, deterministic critical override). A
   verdict that fails the quote guard is asked for once more, then left unscored as
   "Needs manual review" instead of failing the whole call.
@@ -53,18 +53,19 @@ Submission due 10:00 AM Oct 10 — working product over slides.
 - `client/src/components/audio-player.tsx` + `waveform.tsx` — custom player for call
   detail: hairline track, cobalt playhead, a tick at each flagged timestamp, and a canvas
   waveform decoded from the recording (agent channel above the line, customer below) that
-  moves at the playhead during playback. Plain `<audio>` underneath; `wavesurfer.js` is
-  still unwired and no longer needed for this.
+  moves at the playhead during playback. Plain `<audio>` underneath.
 - `client/samples/call-*.m4a` — three scripted test recordings to upload and score, built
   by `client/scripts/make_sample_calls.py` (macOS `say` voices; stereo, agent left,
   customer right). They are not part of the app and are not served by it. Synthetic voices
   on scripted calls: test input, never a benchmark. `call-147.m4a` is the spec's scenario
   (card read back, no identity check) and should score 62 with the preset scorecard.
-- `client/scripts/` — `phase0-*.mjs` (model checks), `phase1-e2e.mjs` (full
+- `client/scripts/` — `phase1-e2e.mjs` (full
   upload→transcribe→score browser test; it finds elements by `data-testid` and by the
   header text "Local AI ready (Whisper + Ollama 3B)", so keep those when restyling;
-  `linya-ads/scripts/record-demo.mjs` waits for the same text).
-  `phase0.html` = WebLLM harness (blocked HW).
+  `linya-ads/scripts/record-demo.mjs` waits for the same text). Its default clip is
+  `client/samples/call-sample.wav` (a 67 s mono text-to-speech call). The Phase 0 model
+  experiments (`phase0-*.mjs`, `phase0.html`) and the `@mlc-ai/web-llm` and
+  `wavesurfer.js` packages were removed on Oct 10; they are in git history.
 - `docs/LOCAL_AI_PLAN.md` — phased local AI/backend plan. `docs/BACKEND_CAPSULE.md` —
   backend notes.
 - `server/` — Linewise's server (Node, Express, `npm run server` from `client/`, port 8787).
@@ -86,7 +87,7 @@ Submission due 10:00 AM Oct 10 — working product over slides.
 - `linya-ads/` — Remotion project for the promo video. Separate package, not part of the app.
 - Local backend only: Ollama on localhost (qwen2.5:3b) + IndexedDB in the browser.
   No hosted servers, no cloud APIs — audio never leaves the machine.
-  `recharts` wired (dashboard); `wavesurfer.js` installed but unwired.
+  `recharts` wired (dashboard).
 - The repo root (this folder) is the git repo; run git here, npm inside `client/`.
 
 ## Commands

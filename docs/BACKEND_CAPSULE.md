@@ -44,8 +44,8 @@ Upload (mp3/wav/m4a)
 Deliberate architecture call (measured, not guessed): the 1.5B model quotes perfectly
 but misjudges critical checks, so **critical checks are double-decided** — the
 deterministic PII engine overrules the LLM whenever an agent-spoken line carries
-card digits (spec §06). The 3B judges everything else. WebLLM in-browser is registered
-as a stub provider but BLOCKED on this laptop (Intel iGPU hangs at init, any size).
+card digits (spec §06). The 3B judges everything else. WebLLM in-browser was tried and
+is BLOCKED on this laptop (Intel iGPU hangs at init, any size); it is not in the code.
 
 ## 2. Setup (exact steps, PowerShell)
 
@@ -78,10 +78,7 @@ hit **Transcribe & score**.
 | `src/lib/db.ts` + `src/lib/store.ts` | Dexie v2 schema + persistence service (calls, results, overrides, scorecards, coaching). |
 | `src/lib/export.ts` | Redacted CSV + PDF. |
 | `src/lib/agents.ts` | Per-agent aggregates for the dashboard. |
-| `scripts/phase0-whisper.mjs` | Standalone Whisper check (Node, CPU). |
-| `scripts/phase0-ollama.mjs [model]` | Standalone verdict check + quote-guard demo. |
 | `scripts/phase1-e2e.mjs` | Full browser E2E (wait for "Local AI ready" → upload → transcribe → score → assert). Set `PHASE1_OFFLINE=1` for the Wi-Fi-off variant. |
-| `phase0.html` | WebLLM browser harness (currently fails on this iGPU — expected). |
 
 ## 4. Contracts your code must honor
 
@@ -96,20 +93,19 @@ hit **Transcribe & score**.
 ## 5. How to extend (common tasks)
 
 - **New scorecard check:** add to `BANK_SUPPORT_V2` (or the persisted editor) — pipeline scores `checks.length` dynamically, no other change.
-- **New model:** `ollama pull <tag>`, change `SCORING_MODEL` in `src/ai/ollama.ts`, re-run `phase0-ollama.mjs` to confirm verdict quality before trusting it.
-- **New provider (e.g. WebLLM on stronger hardware):** implement `BackendProvider` in `src/ai/backend.ts`; flip via `qa-backend` in localStorage. Keep the JSON contract identical.
+- **New model:** `ollama pull <tag>`, change `SCORING_MODEL` in `src/ai/ollama.ts`, re-run `npm run eval` to confirm verdict quality before trusting it.
+- **New provider (e.g. WebLLM on stronger hardware):** implement `BackendProvider` in `src/ai/backend.ts` and return it from `getBackend()`. Keep the JSON contract identical.
 - **Mono speaker split:** `chunksToLines(..., "unknown")` in `pipeline.ts` — replace with LLM turn-labelling when ready.
 
 ## 6. How to test
 
 ```powershell
 npm run build; npm run lint                       # must pass
-node scripts/phase0-whisper.mjs                   # transcription offline, CPU
-node scripts/phase0-ollama.mjs qwen2.5:3b        # one verdict + guard
+npm run eval                                      # scoring against scripted transcripts (needs ollama)
 node scripts/phase1-e2e.mjs                       # whole piece in headless Chrome
 ```
 
-Manual: wait for "Local AI ready" → upload `public/demo-audio/call-sample.wav` → Transcribe & score →
+Manual: wait for "Local AI ready" → upload `samples/call-sample.wav` → Transcribe & score →
 expect card-readback CRIT; reload page → call persists (DevTools → IndexedDB → `qa-sentinel`).
 
 ## 7. Known issues (measured, with workarounds)
@@ -117,4 +113,3 @@ expect card-readback CRIT; reload page → call persists (DevTools → IndexedDB
 - WebLLM hangs the Intel iGPU at init (any size incl. 0.5B); SwiftShader exposes no adapter; Chrome/Win ignores `powerPreference`. Use Ollama. Revisit on stronger hardware.
 - qwen2.5:1.5b is fast (~6 s) but votes `pass` on card-readback even with digit-count rules — never use it for criticals.
 - First Whisper run downloads ~150 MB; first 3B verdict ~52 s cold. Pre-process demo calls before Demo Day; score at most one short call live.
-- `phase0-webllm.mjs` (Node flavor) cannot run — Node here has no WebGPU. Use `phase0.html` in a real browser instead.
