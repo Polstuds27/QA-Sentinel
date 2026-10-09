@@ -130,15 +130,14 @@ for (let bar = 0; bar < totalBars; bar++) {
 }
 
 // How loud each layer is in each scene: quiet and open at the start, a pulse through
-// the how-it-works steps, and back to the pad for the close.
+// the demo, and back to the pad for the close.
 const LEVELS = {
   hook: { pad: 0.7, bass: 0.5, arp: 0, drums: 0 },
   problem: { pad: 0.8, bass: 0.6, arp: 0.3, drums: 0 },
   logoReveal: { pad: 1, bass: 0.8, arp: 0.55, drums: 0 },
-  upload: { pad: 0.9, bass: 0.9, arp: 0.8, drums: 0.8 },
-  transcribe: { pad: 0.9, bass: 0.9, arp: 0.8, drums: 0.8 },
-  score: { pad: 0.9, bass: 0.9, arp: 0.8, drums: 0.8 },
-  whyLocal: { pad: 1, bass: 0.8, arp: 0.4, drums: 0.3 },
+  demo: { pad: 0.9, bass: 0.9, arp: 0.8, drums: 0.8 },
+  offline: { pad: 1, bass: 0.8, arp: 0.4, drums: 0.3 },
+  local: { pad: 1, bass: 0.8, arp: 0.4, drums: 0 },
   cta: { pad: 1, bass: 0.9, arp: 0.6, drums: 0 },
 };
 const BLEND_SECONDS = 0.8;

@@ -10,8 +10,10 @@ import { barCount, noiseEnvelope, Waveform } from "../components/Waveform";
 import { Sfx } from "../components/Sfx";
 import { Wall } from "../components/Wall";
 
-const HEADLINE_VOLUME = "Too many calls to review by hand.";
-const HEADLINE_PRIVACY = "Sensitive audio shouldn't go to cloud AI.";
+// Why the product is needed, in three beats. No numbers: none of this is measured.
+const HEADLINE_SAMPLE = "QA can only sample calls by hand.";
+const HEADLINE_MISSED = "The call that breaks a rule goes unheard.";
+const HEADLINE_PRIVACY = "And cloud AI means uploading customer audio.";
 
 const COLUMN_LEFT = 1040;
 const COLUMN_WIDTH = WIDTH - PAD_X - COLUMN_LEFT;
@@ -19,9 +21,13 @@ const HEADLINE_WIDTH = COLUMN_LEFT - PAD_X - 80;
 
 const ROWS = 8;
 const ROW_HEIGHT = 80;
-const ROW_STAGGER = 0.3;
+const ROW_STAGGER = 0.1;
 const DOT = 16;
 const ROW_WAVE_WIDTH = COLUMN_WIDTH - DOT - 28;
+const ROW_WAVE_HEIGHT = 46;
+// The call nobody listened to, and where on it the rule was broken.
+const MISSED_ROW = 5;
+const MISSED_AT = 0.62;
 
 const CLOUD = 150;
 const UPLOAD_PATH = 190;
@@ -32,6 +38,7 @@ const CARD = /(\d[\d ]{11,}\d)/;
 export const Problem: React.FC = () => {
   const clock = useClock("problem");
   const s = clock.start;
+  const missedAt = CUES.problemMissed;
   const privacy = CUES.problemPrivacy;
   const envelopes = useMemo(
     () =>
@@ -44,14 +51,16 @@ export const Problem: React.FC = () => {
   );
 
   // One call is being listened to while the rest pile up underneath it.
-  const reviewed = interpolate(clock.t, [s + 0.8, privacy], [0, 0.4], {
+  const reviewed = interpolate(clock.t, [s + 0.4, privacy], [0, 0.35], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
+  // Further down the pile, a rule was broken on a call nobody heard.
+  const missed = enter(clock, missedAt + 0.35, 0.5);
 
   // The quoted line heads for the cloud, is stopped, and comes back.
-  const upload = enter(clock, privacy + 1.3, 0.9);
-  const blocked = enter(clock, privacy + 2.5, 0.5);
+  const upload = enter(clock, privacy + 0.5, 0.6);
+  const blocked = enter(clock, privacy + 1.2, 0.4);
   const [before, card, after] = SENSITIVE_LINE.text.split(CARD);
 
   return (
@@ -64,21 +73,22 @@ export const Problem: React.FC = () => {
           width: HEADLINE_WIDTH,
         }}
       >
-        <Headline
-          clock={clock}
-          at={s - 0.1}
-          out={privacy - 0.35}
-          style={{ position: "absolute" }}
-        >
-          {HEADLINE_VOLUME}
-        </Headline>
-        <Headline
-          clock={clock}
-          at={privacy + 0.1}
-          style={{ position: "absolute" }}
-        >
-          {HEADLINE_PRIVACY}
-        </Headline>
+        {[
+          { text: HEADLINE_SAMPLE, at: s - 0.1, out: missedAt - 0.3 },
+          { text: HEADLINE_MISSED, at: missedAt, out: privacy - 0.3 },
+          { text: HEADLINE_PRIVACY, at: privacy, out: undefined },
+        ].map((headline) => (
+          <Headline
+            key={headline.text}
+            clock={clock}
+            at={headline.at}
+            out={headline.out}
+            size={104}
+            style={{ position: "absolute" }}
+          >
+            {headline.text}
+          </Headline>
+        ))}
       </div>
 
       <div
@@ -89,44 +99,77 @@ export const Problem: React.FC = () => {
           width: COLUMN_WIDTH,
         }}
       >
-        {envelopes.map((envelope, i) => (
-          <Rise
-            key={i}
-            clock={clock}
-            at={s + 0.4 + i * ROW_STAGGER}
-            out={privacy - 0.45}
-            style={{
-              height: ROW_HEIGHT,
-              boxSizing: "border-box",
-              display: "flex",
-              alignItems: "center",
-              gap: 28,
-              borderTop: `1px solid ${colors.border}`,
-            }}
-          >
-            <span
+        {envelopes.map((envelope, i) => {
+          const flagged = i === MISSED_ROW ? missed : 0;
+          return (
+            <Rise
+              key={i}
+              clock={clock}
+              at={s + 0.15 + i * ROW_STAGGER}
+              out={privacy - 0.4}
               style={{
-                width: DOT,
-                height: DOT,
+                height: ROW_HEIGHT,
                 boxSizing: "border-box",
-                flexShrink: 0,
-                borderRadius: 9999,
-                border: `1px solid ${i === 0 ? colors.primary : colors.mutedForeground}`,
-                background: i === 0 ? colors.primary : "transparent",
+                display: "flex",
+                alignItems: "center",
+                gap: 28,
+                borderTop: `1px solid ${colors.border}`,
               }}
-            />
-            <Waveform
-              width={ROW_WAVE_WIDTH}
-              height={46}
-              envelope={envelope}
-              head={i === 0 ? reviewed : undefined}
-              time={clock.t}
-              live={i === 0}
-              bar={4}
-              gap={4}
-            />
-          </Rise>
-        ))}
+            >
+              <span
+                style={{
+                  width: DOT,
+                  height: DOT,
+                  boxSizing: "border-box",
+                  flexShrink: 0,
+                  borderRadius: 9999,
+                  border: `1px solid ${
+                    i === 0
+                      ? colors.primary
+                      : interpolateColors(
+                          flagged,
+                          [0, 1],
+                          [colors.mutedForeground, colors.destructive],
+                        )
+                  }`,
+                  background:
+                    i === 0
+                      ? colors.primary
+                      : interpolateColors(
+                          flagged,
+                          [0, 1],
+                          [colors.background, colors.destructive],
+                        ),
+                }}
+              />
+              <div style={{ position: "relative" }}>
+                <Waveform
+                  width={ROW_WAVE_WIDTH}
+                  height={ROW_WAVE_HEIGHT}
+                  envelope={envelope}
+                  head={i === 0 ? reviewed : undefined}
+                  time={clock.t}
+                  live={i === 0}
+                  bar={4}
+                  gap={4}
+                />
+                {i === MISSED_ROW ? (
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: ROW_WAVE_WIDTH * MISSED_AT,
+                      top: -8,
+                      width: 3,
+                      height: ROW_WAVE_HEIGHT + 16,
+                      background: colors.destructive,
+                      transform: `scaleY(${missed})`,
+                    }}
+                  />
+                ) : null}
+              </div>
+            </Rise>
+          );
+        })}
       </div>
 
       <div
@@ -142,7 +185,7 @@ export const Problem: React.FC = () => {
       >
         <Rise
           clock={clock}
-          at={privacy + 0.9}
+          at={privacy + 0.25}
           style={{ position: "relative", width: CLOUD, height: CLOUD }}
         >
           <CloudIcon
@@ -175,7 +218,7 @@ export const Problem: React.FC = () => {
         </div>
         <Rise
           clock={clock}
-          at={privacy + 0.4}
+          at={privacy + 0.1}
           style={{
             alignSelf: "stretch",
             display: "grid",
@@ -209,7 +252,7 @@ export const Problem: React.FC = () => {
         </Rise>
         <Rise
           clock={clock}
-          at={privacy + 0.6}
+          at={privacy + 0.2}
           style={{
             alignSelf: "flex-start",
             marginTop: 18,
@@ -221,16 +264,18 @@ export const Problem: React.FC = () => {
           Sample call, scripted data
         </Rise>
       </div>
+
       {envelopes.map((_, i) => (
         <Sfx
           key={i}
           clock={clock}
-          at={s + 0.4 + i * ROW_STAGGER}
+          at={s + 0.15 + i * ROW_STAGGER}
           name="tick"
-          volume={0.8}
+          volume={0.7}
         />
       ))}
-      <Sfx clock={clock} at={privacy + 2.5} name="flag" />
+      <Sfx clock={clock} at={missedAt + 0.35} name="flag" />
+      <Sfx clock={clock} at={privacy + 1.2} name="flag" />
     </Wall>
   );
 };

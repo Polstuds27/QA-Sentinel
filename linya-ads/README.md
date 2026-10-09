@@ -1,12 +1,13 @@
-# Linya ad
+# Linewise ad
 
-A 1-minute promo video for Linya, built with [Remotion](https://www.remotion.dev).
+A 1-minute promo video for Linewise (the folder keeps the product's earlier name), built with [Remotion](https://www.remotion.dev).
 1920x1080, 60 fps, 60 seconds. Composition id: `LinyaAd`.
 
-The screens are recreated from the app in `../frontend/` and show its scripted sample
-calls (`src/data/demo.ts`). The video is a concept of the product experience: it shows
-no accuracy or speed numbers, and the only scores on screen are the ones the app's own
-scorecard gives those sample calls.
+The middle of the video is the real app, recorded from the browser: one run of the
+scripted test call `../client/samples/call-147.m4a`, and the same upload again with all
+internet access blocked. The hook, the problem, the logo, the "what runs locally" card
+and the outro are animation. The video shows no accuracy or speed numbers; the only
+numbers on screen are the ones the app displayed for that call.
 
 ## Commands
 
@@ -16,7 +17,34 @@ npm run dev        # preview in Remotion Studio
 npm run render     # writes out/linya-ad.mp4 (h264, 60 fps)
 npm run lint
 npm run audio      # regenerates the music and sound effects in public/audio/
+npm run record     # records the app again into public/demo/ (see below)
 ```
+
+## The recorded demo
+
+```sh
+npm run record
+```
+
+Needs `ollama serve` running, and uses `npm run whisper` from `../client` if it is up.
+The script starts its own copy of the app with an empty database (so the calls already
+on this machine are neither shown nor touched), drives it in headless Chrome in dark
+mode, and saves what the browser painted:
+
+- `public/demo/online.mp4`: upload, scoring, the call detail, a flag clicked, the
+  scorecard, a coaching note, Export PDF, then the scorecard editor, the phones
+  section and the agent dashboard.
+- `public/demo/offline.mp4`: the same upload in a browser that can reach nothing but
+  this machine. The script stops if that block is not in effect.
+- `public/demo/report.pdf` and `report.png`: the report the app exported, and its first
+  page as an image.
+- `src/data/footage.json`: when each thing happened and where it was on screen. The
+  scenes take their cuts, zooms and outlines from this file.
+
+Nothing in the footage is drawn or retouched. The video only chooses which part plays,
+how fast (waiting is sped up and labelled, not cut out) and where the camera looks. The
+cobalt outlines and click rings are drawn on top to point at things; the recorded
+browser shows no cursor.
 
 ## Voiceover and captions
 
@@ -48,6 +76,7 @@ or right to match where they happen on screen.
 ## Where things are
 
 - `src/timing.ts`: every timing, in seconds. Scene starts and the cues inside scenes.
-- `src/data/demo.ts`: all sample transcript and score data.
+- `src/data/footage.json`: the recording's timeline. `src/data/demo.ts`: the one sample
+  line the problem scene quotes.
 - `src/theme.ts`: colours and type from the app's dark theme, the tagline and the team name.
 - `src/scenes/`: one component per scene. `src/components/`: shared pieces.

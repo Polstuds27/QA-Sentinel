@@ -1,7 +1,7 @@
 import React, { useId } from "react";
 import { colors } from "../theme";
 
-// The Linya mark from frontend/src/components/logo.tsx: two lines meet as an L, and
+// The Linewise mark from client/src/components/logo.tsx: two lines meet as an L, and
 // the cobalt dot is the moment on the call worth hearing. The dot never touches the
 // lines. `vertical`, `horizontal` and `dot` (each 0 to 1) draw it in.
 export const LogoMark: React.FC<{
@@ -51,6 +51,6 @@ export const Logo: React.FC<{ size: number }> = ({ size }) => (
     }}
   >
     <LogoMark size={size} />
-    Linya
+    Linewise
   </span>
 );

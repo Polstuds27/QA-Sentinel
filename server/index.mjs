@@ -364,10 +364,10 @@ app.get("/api/decisions", adminOnly, (_req, res) =>
   res.json({ ok: true, decisions: Object.fromEntries(all("SELECT call_id, check_id, verdict FROM decisions").map((d) => [`${d.call_id}:${d.check_id}`, d.verdict])) }),
 );
 
-// Confirm or Dismiss: records the decision and makes it the call's verdict for that check.
+// Confirm or Dismiss, or a mark on a call scored by hand: records the decision and makes it the call's verdict for that check.
 app.post("/api/calls/:id/decision", adminOnly, (req, res) => {
   const { checkId, verdict } = req.body ?? {};
-  if (!checkId || !["pass", "fail"].includes(verdict)) return res.status(400).json({ ok: false, message: "Not a decision." });
+  if (!checkId || !["pass", "fail", "not_applicable"].includes(verdict)) return res.status(400).json({ ok: false, message: "Not a decision." });
   run("INSERT OR REPLACE INTO decisions (call_id, check_id, verdict, decided_at) VALUES (?, ?, ?, ?)", req.params.id, checkId, verdict, now());
   run("UPDATE results SET verdict = ? WHERE call_id = ? AND check_id = ?", verdict, req.params.id, checkId);
   res.json({ ok: true });

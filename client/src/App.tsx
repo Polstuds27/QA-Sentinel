@@ -17,10 +17,10 @@ import { PhoneUploads } from "@/components/phone-uploads";
 import { fetchRecordingAudio, getInfo, listAgents, listRecordings, setRecordingStatus, takeNextRecording, type Agent, type Recording, type ServerInfo } from "@/lib/server";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { callTitle, type DemoCall } from "./mock";
-import { isAIEnabled, runLocalPipeline, setAIEnabled, type PipelineProgress } from "./ai/pipeline";
+import { runLocalPipeline, type PipelineProgress } from "./ai/pipeline";
 import { getBackend } from "./ai/backend";
 import { generateCoachingNote } from "./ai/coaching";
-import { BANK_SUPPORT_V2, STATUS_LABEL, scoreCall, type CallStatus, type Check } from "./lib/scorecard";
+import { BANK_SUPPORT_V2, BY_HAND_NOTE, NOT_ENGLISH_NOTE, STATUS_LABEL, gradeCall, type CallStatus, type Check, type Decisions, type Verdict } from "./lib/scorecard";
 import { redactPII } from "./lib/pii";
 import { FIRST_CALL_NUMBER, deleteAICall, getCoaching, getScorecard, loadAICalls, loadOverrides, saveAICall, saveCoaching, saveScorecard, setOverride } from "./lib/store";
 import { exportPDF } from "./lib/export";
@@ -76,15 +76,44 @@ function StatusBadge({ status, children }: { status: CallStatus; children: React
   return <Badge variant={variant}>{children}</Badge>;
 }
 
+// What each status means. The ranges are the ones scoreCall uses (lib/scorecard.ts).
+const SCORE_RANGES: Array<{ status: CallStatus; range: string }> = [
+  { status: "green", range: "85 to 100" },
+  { status: "amber", range: "70 to 84" },
+  { status: "red", range: "Below 70" },
+];
+
+function ScoreLegend({ className }: { className?: string }) {
+  return (
+    <div data-testid="score-legend" className={cn("label flex flex-col gap-3 text-muted-foreground", className)}>
+      <ul className="flex flex-col gap-2">
+        {SCORE_RANGES.map(({ status, range }) => (
+          <li key={status} className="flex items-center gap-3">
+            <StatusBadge status={status}>{STATUS_LABEL[status]}</StatusBadge>
+            <span className="tabular-nums">{range}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="max-w-[48ch]">A failed critical check makes a call Failed whatever its score. A call that is not in English stays Needs review until an analyst has marked every check.</p>
+    </div>
+  );
+}
+
 const VERDICTS = {
   pass: { label: "Pass", icon: CheckIcon, className: "text-foreground" },
   fail: { label: "Fail", icon: XIcon, className: "text-destructive" },
   critical: { label: "Critical", icon: XIcon, className: "text-destructive" },
   na: { label: "N/A", icon: MinusIcon, className: "text-muted-foreground" },
+  review: { label: "Review", icon: MinusIcon, className: "text-status-amber" },
 };
 
+// The header's status line. scripts/phase1-e2e.mjs and the video's recording script wait
+// for the first of these, so change them together.
+const AI_READY_TEXT = "Local AI ready (Whisper + Ollama 3B)";
+const AI_DOWN_TEXT = "Ollama is not running: start it to score calls";
+
 const SECTION = "grid gap-x-10 gap-y-8 lg:grid-cols-12";
-const PANEL = "animate-hang pt-12 pb-32 sm:pt-20";
+const PANEL = "animate-hang pt-12 pb-24 sm:pt-20";
 const HEADING = "display text-3xl sm:text-4xl";
 
 export default function App() {
@@ -93,8 +122,8 @@ export default function App() {
   const [checks, setChecks] = useState<Check[]>(BANK_SUPPORT_V2);
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [flaggedOnly, setFlaggedOnly] = useState(false);
-  const [aiOn, setAiOn] = useState(isAIEnabled());
-  const [aiChecking, setAiChecking] = useState(false);
+  // Whether the scoring model can be reached. Null until the first check has answered.
+  const [aiReady, setAiReady] = useState<boolean | null>(null);
   const [aiError, setAiError] = useState("");
   const [aiCalls, setAiCalls] = useState<DemoCall[]>([]);
   const [coaching, setCoaching] = useState<Record<string, string>>({});
@@ -103,7 +132,7 @@ export default function App() {
   // The scorecard being edited. Null means the saved scorecard is shown read-only.
   const [draft, setDraft] = useState<Check[] | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
-  const [decisions, setDecisions] = useState<Record<string, "pass" | "fail">>({});
+  const [decisions, setDecisions] = useState<Decisions>({});
   const audioRef = useRef<HTMLAudioElement>(null);
   const [phones, setPhones] = useState<{ online: boolean; info: ServerInfo | null; agents: Agent[]; recordings: Recording[] }>({ online: false, info: null, agents: [], recordings: [] });
   const [phoneStage, setPhoneStage] = useState("");
@@ -121,30 +150,48 @@ export default function App() {
     void loadOverrides().then((saved) => setDecisions((d) => ({ ...saved, ...d }))).catch(() => {});
   }, []);
 
-  // Keep an eye on the upload server, and while Local AI is on, work through its queue.
+  // Scoring needs the local model. There is no switch: the app checks for it on load and
+  // keeps checking, so the header always says whether recordings can be scored right now.
+  useEffect(() => {
+    let alive = true;
+    let misses = 0;
+    const check = async () => {
+      const ok = await getBackend().check();
+      if (!alive) return;
+      misses = ok ? 0 : misses + 1;
+      // One missed answer while the model is busy is not "down": wait for a second one.
+      setAiReady((was) => (ok ? true : was === null || misses > 1 ? false : was));
+    };
+    void check();
+    const timer = setInterval(() => void check(), 5000);
+    return () => { alive = false; clearInterval(timer); };
+  }, []);
+
+  // Keep an eye on the upload server, and while the model is ready, work through its queue.
   useEffect(() => {
     const tick = () => {
       void refreshPhones();
       // While a recording is being scored, keep telling the server so. If this tab is
       // closed or reloaded mid-way, the server notices the silence and queues it again.
       if (scoringPhoneId.current) void setRecordingStatus(scoringPhoneId.current, { status: "processing" }).catch(() => {});
-      if (aiOn) void scoreNextFromPhones();
+      if (aiReady) void scoreNextFromPhones();
     };
     tick();
     const timer = setInterval(tick, 4000);
     return () => clearInterval(timer);
     // refreshPhones and scoreNextFromPhones read their state through refs and setters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aiOn]);
+  }, [aiReady]);
 
   // Every call here was really transcribed and scored. There is no sample data.
   const calls: DemoCall[] = aiCalls;
   const selected = calls.find((c) => c.id === selectedId) ?? calls[0] ?? NO_CALL;
-  const { score, status } = scoreCall(checks, selected.results);
+  const grade = gradeCall(selected, checks, decisions);
+  const { score, status } = grade;
 
   const visible = calls.filter((c) => {
     if (!flaggedOnly) return true;
-    return scoreCall(checks, c.results).status === "red";
+    return gradeCall(c, checks, decisions).status === "red";
   });
 
   function onFiles(files: FileList | null) {
@@ -157,25 +204,6 @@ export default function App() {
       file: f,
     }));
     setQueue((q) => [...items, ...q]);
-  }
-
-  async function toggleAI(on: boolean) {
-    setAiError("");
-    if (!on) {
-      setAiOn(false);
-      setAIEnabled(false);
-      return;
-    }
-    setAiChecking(true);
-    const backend = getBackend();
-    const ok = await backend.check();
-    setAiChecking(false);
-    if (!ok) {
-      setAiError(`${backend.label} not reachable — start the backend first (Ollama: \`ollama serve\`).`);
-      return;
-    }
-    setAiOn(true);
-    setAIEnabled(true);
   }
 
   function patchQueue(id: number, status: string) {
@@ -243,8 +271,8 @@ export default function App() {
       void refreshPhones();
       const file = await fetchRecordingAudio(taken);
       const call = await scoreRecording(file, { name: taken.name, agent: taken.agent, audio: URL.createObjectURL(file), uploadId: taken.id }, (p) => setPhoneStage(`${p.stage}: ${p.detail}`));
-      const { score, status } = scoreCall(checksRef.current, call.results);
-      await setRecordingStatus(taken.id, { status: "scored", callId: call.id, score, callStatus: status });
+      const { score, status } = gradeCall(call, checksRef.current, {});
+      await setRecordingStatus(taken.id, { status: "scored", callId: call.id, score: score ?? undefined, callStatus: status });
     } catch (e) {
       if (taken) await setRecordingStatus(taken.id, { status: "failed", error: e instanceof Error ? e.message : String(e) }).catch(() => {});
     } finally {
@@ -272,7 +300,7 @@ export default function App() {
     for (const item of queue.filter((q) => q.status === "ready").reverse()) await runAI(item);
   }
 
-  async function overrideVerdict(callId: string, checkId: string, verdict: "pass" | "fail") {
+  async function overrideVerdict(callId: string, checkId: string, verdict: Verdict) {
     setDecisions((d) => ({ ...d, [`${callId}:${checkId}`]: verdict }));
     setAiCalls((cs) =>
       cs.map((c) =>
@@ -285,8 +313,8 @@ export default function App() {
   }
 
   async function makeCoachingNote() {
-    if (!aiOn) {
-      setAiError("Flip Local AI on first — coaching notes come from the local model.");
+    if (!aiReady) {
+      setAiError("Ollama is not running. Coaching notes come from the local model, so start it first.");
       return;
     }
     setCoachingBusy(true);
@@ -352,9 +380,9 @@ export default function App() {
   const busy = queue.some((q) => queueProgress(q.status) !== null);
   const readyCount = queue.filter((q) => q.status === "ready").length;
   const save = (next: Check[]) => { setChecks(next); void saveScorecard(next).catch(() => {}); };
-  const stats = agentStats(calls, checks);
+  const stats = agentStats(calls, checks, decisions);
 
-  const flagMarkers = selected.results
+  const flagMarkers = grade.results
     .filter((r) => r.verdict === "fail" && r.timestamp)
     .map((r) => ({
       ts: r.timestamp!,
@@ -381,21 +409,10 @@ export default function App() {
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-x-10 px-5 sm:px-8 md:h-16 md:flex-row md:items-center md:justify-between">
           <div className="flex h-14 min-w-0 items-center gap-4">
             <Logo className="shrink-0" />
-            <span className="label flex min-w-0 items-center gap-2 text-muted-foreground">
-              <span aria-hidden className="size-2 shrink-0 rounded-full bg-foreground" />
-              <span className="truncate">{aiOn ? "Local AI on (Whisper + Ollama 3B)" : "Local AI off"}</span>
+            <span data-testid="ai-status" role="status" className={cn("label flex min-w-0 items-center gap-2", aiReady === false ? "text-destructive" : "text-muted-foreground")}>
+              <span aria-hidden className={cn("size-2 shrink-0 rounded-full border", aiReady ? "border-foreground bg-foreground" : aiReady === false ? "border-destructive bg-destructive" : "border-muted-foreground")} />
+              <span className="truncate">{aiReady ? AI_READY_TEXT : aiReady === false ? AI_DOWN_TEXT : "Checking local AI…"}</span>
             </span>
-            <label className="label flex shrink-0 cursor-pointer items-center gap-2">
-              <input
-                type="checkbox"
-                data-testid="ai-toggle"
-                checked={aiOn}
-                disabled={aiChecking}
-                onChange={(e) => void toggleAI(e.target.checked)}
-                className="size-4 cursor-pointer appearance-none border border-foreground transition-colors duration-200 checked:border-primary checked:bg-primary disabled:opacity-50"
-              />
-              Local AI{aiChecking ? "…" : ""}
-            </label>
           </div>
           <nav className="-mx-5 shrink-0 overflow-x-auto px-5 sm:-mx-8 sm:px-8 md:mx-0 md:px-0">
             <TabsList className="w-max min-w-full">
@@ -419,7 +436,10 @@ export default function App() {
                 <input type="file" data-testid="upload" accept="audio/*,.mp3,.wav,.m4a" multiple className="absolute inset-0 cursor-pointer opacity-0" onChange={(e) => onFiles(e.target.files)} />
               </label>
               {aiError && <p role="alert" className="border border-destructive px-4 py-3 text-sm text-destructive">{aiError}</p>}
-              {aiOn && readyCount > 1 && (
+              {aiReady === false && queue.some((q) => q.status === "ready") && (
+                <p role="alert" className="border border-destructive px-4 py-3 text-sm text-destructive">Ollama is not running, so these recordings cannot be scored yet. Start it (<code>ollama serve</code>) and the button to score them appears here.</p>
+              )}
+              {aiReady && readyCount > 1 && (
                 <Button className="self-start" disabled={busy} onClick={() => void runAll()}>Transcribe &amp; score all ({readyCount})</Button>
               )}
               {queue.length > 0 && (
@@ -432,7 +452,7 @@ export default function App() {
                         <span className="flex items-center gap-3">
                           {progress !== null && <Spinner className="text-primary" aria-label="Working" />}
                           <span data-testid={`queue-status-${q.id}`} className={cn(progress !== null ? "text-foreground" : "text-muted-foreground")}>{q.status}</span>
-                          {aiOn && q.status === "ready" && (
+                          {aiReady && q.status === "ready" && (
                             <Button size="sm" variant={readyCount > 1 ? "outline" : "default"} disabled={busy} data-testid={`transcribe-${q.id}`} onClick={() => void runAI(q)}>
                               Transcribe &amp; score
                             </Button>
@@ -461,14 +481,14 @@ export default function App() {
             <section className={SECTION}>
               <div className="flex flex-col gap-5 lg:col-span-5">
                 <h2 className={HEADING}>Sent from phones</h2>
-                <p className="max-w-[48ch] text-muted-foreground">Recordings agents send with the “Send to Linewise” shortcut. They are scored one at a time while Local AI is on.</p>
+                <p className="max-w-[48ch] text-muted-foreground">Recordings agents send with the “Send to Linewise” shortcut. They are scored one at a time, as they arrive.</p>
               </div>
               <div className="lg:col-span-7">
                 <PhoneUploads
                   recordings={phones.recordings}
                   agents={phones.agents}
                   stage={phoneStage}
-                  aiOn={aiOn}
+                  aiReady={aiReady !== false}
                   onOpen={(callId) => void openCall(callId)}
                   onRetry={(r) => void setRecordingStatus(r.id, { status: "uploaded" }).then(refreshPhones)}
                 />
@@ -483,6 +503,7 @@ export default function App() {
                 <Checkbox id="flagged-only" checked={flaggedOnly} onCheckedChange={(v) => setFlaggedOnly(v)} />
                 <FieldLabel htmlFor="flagged-only">Failed calls only</FieldLabel>
               </Field>
+              <ScoreLegend />
             </div>
             <div className="lg:col-span-7">
               {visible.length === 0 ? (
@@ -491,7 +512,7 @@ export default function App() {
                     <EmptyTitle>{calls.length === 0 ? "No calls yet" : "No failed calls"}</EmptyTitle>
                     <EmptyDescription>
                       {calls.length === 0
-                        ? (aiOn ? "Upload a recording above and press Transcribe & score, or send one from a phone." : "Tick Local AI at the top, then upload a recording above or send one from a phone.")
+                        ? (aiReady === false ? "Start Ollama, then upload a recording above or send one from a phone." : "Upload a recording above and press Transcribe & score, or send one from a phone.")
                         : "Nothing here scored below 70 or failed a critical check. Clear the filter to see every call."}
                     </EmptyDescription>
                   </EmptyHeader>
@@ -499,8 +520,8 @@ export default function App() {
               ) : (
                 <ul className="border-b border-border">
                   {visible.map((c) => {
-                    const s = scoreCall(checks, c.results);
-                    const flags = c.results.filter((r) => r.verdict === "fail").length;
+                    const s = gradeCall(c, checks, decisions);
+                    const flags = s.results.filter((r) => r.verdict === "fail").length;
                     return (
                       <li key={c.id} className="flex items-center gap-2 border-t border-border">
                         <button
@@ -523,7 +544,7 @@ export default function App() {
                           </span>
                           <span className="flex items-center gap-4 max-sm:pl-5">
                             <span className="label text-muted-foreground tabular-nums">{flags} flags</span>
-                            <StatusBadge status={s.status}>{s.score} / 100 · {STATUS_LABEL[s.status]}</StatusBadge>
+                            <StatusBadge status={s.status}>{s.score === null ? `${checks.length - s.pending} of ${checks.length} reviewed` : `${s.score} / 100`} · {STATUS_LABEL[s.status]}</StatusBadge>
                           </span>
                         </button>
                         {(pendingDelete === c.id ? (
@@ -559,12 +580,19 @@ export default function App() {
             <div className="flex flex-col gap-3">
               <h2 className="display text-4xl break-words sm:text-5xl">{callName(selected)}</h2>
               <p className="text-muted-foreground break-all">{callFacts(selected)}{selected.languages?.length ? ` · ${languageLabel(selected.languages)}` : ""}</p>
+              {grade.byHand && (
+                <p data-testid="language-review" className={cn("label max-w-[60ch]", score === null ? "text-status-amber" : "text-muted-foreground")}>{score === null ? NOT_ENGLISH_NOTE : BY_HAND_NOTE}</p>
+              )}
             </div>
             <div className="flex items-center gap-4">
-              <p className="display text-4xl tabular-nums sm:text-5xl">
-                <span className={STATUS_TEXT[status]}>{score}</span>
-                <span className="text-muted-foreground"> / 100</span>
-              </p>
+              {score === null ? (
+                <p data-testid="review-progress" className="display text-3xl text-muted-foreground tabular-nums sm:text-4xl">{checks.length - grade.pending} of {checks.length} reviewed</p>
+              ) : (
+                <p className="display text-4xl tabular-nums sm:text-5xl">
+                  <span className={STATUS_TEXT[status]}>{score}</span>
+                  <span className="text-muted-foreground"> / 100</span>
+                </p>
+              )}
               <StatusBadge status={status}>{STATUS_LABEL[status]}</StatusBadge>
             </div>
           </div>
@@ -595,9 +623,10 @@ export default function App() {
               <h3 className="mb-5 text-xl font-medium tracking-tight">Scorecard</h3>
               <ul className="border-b border-border">
                 {checks.map((c) => {
-                  const r = selected.results.find((x) => x.check_id === c.id);
+                  // On a call scored by hand, a check waits as "Review" until the analyst marks it.
+                  const r = grade.results.find((x) => x.check_id === c.id);
                   const decided = decisions[`${selected.id}:${c.id}`];
-                  const verdict = VERDICTS[!r || r.verdict === "not_applicable" ? "na" : r.verdict === "pass" ? "pass" : c.critical ? "critical" : "fail"];
+                  const verdict = VERDICTS[grade.byHand && !r ? "review" : !r || r.verdict === "not_applicable" ? "na" : r.verdict === "pass" ? "pass" : c.critical ? "critical" : "fail"];
                   return (
                     <li key={c.id} className="flex flex-col gap-2 border-t border-border py-3 text-sm leading-relaxed">
                       <div className="flex items-start gap-3">
@@ -614,7 +643,23 @@ export default function App() {
                           {r.reason}
                         </p>
                       )}
-                      {decided ? (
+                      {grade.byHand ? (
+                        <div className="flex flex-wrap items-center gap-2 pl-23">
+                          <span className="label text-muted-foreground">Analyst:</span>
+                          {([["pass", "Pass"], ["fail", "Fail"], ["not_applicable", "N/A"]] as const).map(([value, label]) => (
+                            <Button
+                              key={value}
+                              size="xs"
+                              data-testid={`mark-${c.id}-${value}`}
+                              aria-pressed={decided === value}
+                              variant={decided === value ? "secondary" : "outline"}
+                              onClick={() => void overrideVerdict(selected.id, c.id, value)}
+                            >
+                              {label}
+                            </Button>
+                          ))}
+                        </div>
+                      ) : decided ? (
                         <p className="label pl-23 text-muted-foreground">Analyst {decided === "fail" ? "confirmed this flag" : "dismissed this flag"}</p>
                       ) : r && r.verdict === "fail" && (
                         <div className="flex items-center gap-2 pl-23">
@@ -627,8 +672,9 @@ export default function App() {
                   );
                 })}
               </ul>
+              <ScoreLegend className="mt-6" />
               <div className="mt-8 flex flex-wrap gap-2">
-                <Button onClick={() => exportPDF(selected, checks)}>Export PDF</Button>
+                <Button onClick={() => exportPDF(selected, checks, decisions)}>Export PDF</Button>
                 {(pendingDelete === selected.id ? (
                     <>
                       <Button variant="destructive" onClick={() => { void removeCall(selected.id); setTab("calls"); }}>Delete this call and its recording</Button>
@@ -640,13 +686,13 @@ export default function App() {
               </div>
               <div className="mt-12 flex flex-col items-start gap-4">
                 <h3 className="text-xl font-medium tracking-tight">Coaching note</h3>
-                {coaching[selected.id] ? (
+                {!grade.byHand && coaching[selected.id] ? (
                   <p className="max-w-[48ch]">“{coaching[selected.id]}”</p>
                 ) : (
                   <p className="text-muted-foreground">No note yet for this call.</p>
                 )}
-                <Button variant="secondary" disabled={!aiOn || coachingBusy} onClick={() => void makeCoachingNote()}>
-                  {coachingBusy ? "Writing…" : "Generate with local model"}
+                <Button variant="secondary" disabled={!aiReady || coachingBusy} onClick={() => void makeCoachingNote()}>
+                  {coachingBusy ? "Writing…" : "Generate note"}
                 </Button>
               </div>
             </div>
@@ -657,7 +703,7 @@ export default function App() {
 
         <TabsContent value="scorecards" className={cn(PANEL, SECTION)}>
           <div className="flex flex-col gap-5 lg:col-span-5">
-            <h2 className={HEADING}>4 · Scorecard editor — Bank Support v2</h2>
+            <h2 className={HEADING}>4 · Scorecard editor</h2>
             <p className="max-w-[48ch] text-muted-foreground">The rules every call is checked against. Weights must total 100. Changes are saved in this browser and apply to the next call you score.</p>
             {draft ? (
               <Button variant="outline" className="self-start" onClick={() => setDraft(BANK_SUPPORT_V2)}>Reset to preset</Button>
@@ -763,6 +809,18 @@ export default function App() {
             <div className="flex flex-col gap-5 lg:col-span-5">
               <h2 className={HEADING}>Agents and their phones</h2>
               <p className="max-w-[48ch] text-muted-foreground">Add an agent to get their own upload link. They paste it once into the “Send to Linewise” shortcut, and every recording they send arrives under their name.</p>
+              <div className="mt-6 flex flex-col gap-4 border-t border-border pt-6">
+                <h3 className="text-xl font-medium tracking-tight">Set up the shortcut on an iPhone</h3>
+                <ol className="flex max-w-[48ch] list-decimal flex-col gap-3 pl-5 text-sm leading-relaxed text-muted-foreground marker:text-foreground">
+                  <li>Add the agent here and press <span className="font-medium text-foreground">Show link</span>. Scan the QR code with the iPhone's Camera, open it, and tap <span className="font-medium text-foreground">Copy link</span>.</li>
+                  <li>Open the <span className="font-medium text-foreground">Shortcuts</span> app, make a new shortcut and name it <span className="font-medium text-foreground">Send to Linewise</span>.</li>
+                  <li>Add the action <span className="font-medium text-foreground">Text</span> and paste the link into it.</li>
+                  <li>Add the action <span className="font-medium text-foreground">Get Contents of URL</span>. Tap the small blue arrow on it, set <span className="font-medium text-foreground">Method</span> to POST and <span className="font-medium text-foreground">Request Body</span> to Form.</li>
+                  <li>Tap <span className="font-medium text-foreground">Add new field</span>, choose File, type <span className="font-medium text-foreground">file</span> as the key, then tap Choose and pick <span className="font-medium text-foreground">Shortcut Input</span>.</li>
+                  <li>Tap the ⓘ button and turn on <span className="font-medium text-foreground">Show in Share Sheet</span>.</li>
+                  <li>To send a call: in Notes or Voice Memos, share the recording and tap <span className="font-medium text-foreground">Send to Linewise</span>. The phone must be on the same Wi-Fi as this laptop.</li>
+                </ol>
+              </div>
             </div>
             <div className="lg:col-span-7">
               <Devices online={phones.online} info={phones.info} agents={phones.agents} onChange={() => void refreshPhones()} />
@@ -828,7 +886,7 @@ export default function App() {
                   <li key={c.id} className="flex items-center justify-between gap-3 border-t border-border py-3">
                     <span className="min-w-0 truncate font-medium" title={callName(c)}>{callName(c)}</span>
                     <span className="flex shrink-0 gap-1">
-                      <Button size="sm" variant="outline" aria-label={`Download ${callName(c)} as PDF`} onClick={() => exportPDF(c, checks)}>PDF</Button>
+                      <Button size="sm" variant="outline" aria-label={`Download ${callName(c)} as PDF`} onClick={() => exportPDF(c, checks, decisions)}>PDF</Button>
                     </span>
                   </li>
                 ))}
@@ -837,6 +895,10 @@ export default function App() {
           </div>
         </TabsContent>
       </main>
+
+      <footer className="mx-auto w-full max-w-7xl px-5 pb-10 sm:px-8">
+        <p className="label border-t border-border pt-5 text-muted-foreground">Linewise uses AI, and AI can make mistakes. Listen to a flag before you act on it.</p>
+      </footer>
     </Tabs>
   );
 }

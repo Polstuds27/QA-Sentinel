@@ -58,7 +58,7 @@ export const noiseEnvelope = (count: number, seed: string): Envelope => {
   return { up, down };
 };
 
-// The app's waveform (frontend/src/components/waveform.tsx): square bars on a line,
+// The app's waveform (client/src/components/waveform.tsx): square bars on a line,
 // played bars in the foreground colour, and the bars at the playhead cobalt and moving
 // with the voice.
 export const Waveform: React.FC<{

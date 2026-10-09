@@ -1,4 +1,4 @@
-// Phase 1+2 end-to-end: toggle AI on, upload the TTS sample, transcribe + score,
+// Phase 1+2 end-to-end: wait for the local AI to report ready, upload the TTS sample, transcribe + score,
 // print the resulting call. Usage (dev server must be up):
 //   node scripts/phase1-e2e.mjs [wavPath]
 import puppeteer from "puppeteer-core";
@@ -24,14 +24,12 @@ try {
     console.log("offline-mode: ON for transcription (Wi-Fi-off simulation; localhost still live)");
   }
 
-  await page.waitForSelector('[data-testid="ai-toggle"]', { timeout: 30000 });
-  const alreadyOn = await page.$eval('[data-testid="ai-toggle"]', (el) => el.checked);
-  if (!alreadyOn) await page.click('[data-testid="ai-toggle"]');
+  // No switch to click: the app checks Ollama by itself and says so in the header.
   await page.waitForFunction(
-    () => document.body.textContent?.includes("Local AI on (Whisper + Ollama 3B)"),
+    () => document.body.textContent?.includes("Local AI ready (Whisper + Ollama 3B)"),
     { timeout: 30000 },
   );
-  console.log("ai-toggle: ON");
+  console.log("local AI: ready");
 
   const navs = await page.$$("header nav button");
   for (const b of navs) {

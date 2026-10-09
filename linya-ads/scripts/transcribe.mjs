@@ -113,11 +113,29 @@ const whisperCppOutput = await transcribe({
   tokenLevelTimestamps: true,
   splitOnWord: true,
 });
-// Whisper has never seen the product name and spells it by ear.
-const captions = toCaptions({ whisperCppOutput }).captions.map((c) => ({
-  ...c,
-  text: c.text.replace(/\bLin(?:ea|ia|ya)\b/gi, "Linya"),
-}));
+// Whisper has never seen the product name: it hears "Line wise" as two words, or
+// spells it its own way. Join and respell it so the captions show it as one word.
+const heard = toCaptions({ whisperCppOutput }).captions;
+const captions = [];
+for (const caption of heard) {
+  const last = captions[captions.length - 1];
+  if (
+    last &&
+    /^\s*line$/i.test(last.text) &&
+    /^[\s-]*wise\b/i.test(caption.text)
+  ) {
+    captions[captions.length - 1] = {
+      ...last,
+      text: " Linewise" + caption.text.replace(/^[\s-]*wise/i, ""),
+      endMs: caption.endMs,
+    };
+  } else {
+    captions.push({
+      ...caption,
+      text: caption.text.replace(/\bline[- ]?wise\b/gi, "Linewise"),
+    });
+  }
+}
 rmSync(wavPath);
 
 writeFileSync(

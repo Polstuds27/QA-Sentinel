@@ -1,8 +1,10 @@
 # Linewise — the app and its local backend
 
-Local AI call-center QA (formerly QA Sentinel). The UI and the local pipeline are both
+Developer notes for the app. What Linewise is, how to run it and the hackathon
+disclosures are in the README at the repo root.
+
+Local AI call-center QA. The UI and the local pipeline are both
 wired: Whisper transcription, Ollama 3B scoring, PII redaction, persistence, export.
-WebLLM in-browser remains blocked on the test laptop's iGPU (see `../docs/LOCAL_AI_PLAN.md`).
 
 ## Stack
 
@@ -21,7 +23,7 @@ Needs Node 20 or newer. The commands are the same in PowerShell, bash and zsh.
 cd client
 npm install
 npm run models  # once per machine: downloads the speech models (about 300 MB, needs internet)
-npm run dev     # toggle Local AI on in the header (needs ollama serve below)
+npm run dev     # the header shows "Local AI ready" once ollama serve (below) is running
 npm run build   # tsc + vite build
 npm run lint    # oxlint
 npm run whisper # optional, macOS: native Whisper large-v3-turbo (faster and more accurate)
@@ -50,7 +52,7 @@ scoring talks only to Ollama on this machine.
 
 - `samples/` — three scripted test recordings (macOS text-to-speech, made by
   `scripts/make_sample_calls.py`) to upload and score. Not part of the app.
-- Screens: Upload & queue (transcribe & score when Local AI is on) · Calls list (flagged
+- Screens: Upload & queue (transcribe & score whenever Ollama is running) · Calls list (flagged
   filter) · Call detail (waveform player, redacted transcript, scorecard, click timestamp
   to seek, analyst confirm/dismiss, coaching note, PDF export) · Scorecard editor
   (weights and critical toggles, saved to IndexedDB) · Agent dashboard (average score and
@@ -66,17 +68,7 @@ scoring talks only to Ollama on this machine.
 
 Do not add cloud AI APIs — the spec forbids audio upload.
 
-## Submission disclosures (check before 10:00 AM, Oct 10)
+## Submission disclosures
 
-The hackathon form asks for these. Keep only what is true of the code at the deadline.
-
-| Field | Status today |
-|---|---|
-| What runs locally | Speech-to-text (Whisper base in the browser), check scoring and coaching notes (Ollama on localhost), PII redaction (regex + Luhn), storage, PDF export, all UI. |
-| What requires internet | Setup only: `npm install`, `npm run models` (speech models, about 300 MB), the first `npm run whisper` (1.6 GB) and `ollama pull`. Running the app needs none; it makes no request to any other machine. No cloud AI APIs. |
-| Models used | Whisper large-v3-turbo (via whisper.cpp, when `npm run whisper` is running) or Whisper base (ONNX, via Transformers.js, in the browser); pyannote segmentation 3.0 (ONNX, speaker separation on mono recordings); qwen2.5:3b via Ollama. WebLLM was tried and is blocked on the test hardware, so do not list it as used. |
-| Technologies and frameworks | React, Vite, TypeScript, Tailwind, shadcn/ui, Base UI, Transformers.js, whisper.cpp, Ollama, Dexie, Recharts, jsPDF. |
-| APIs and cloud services | None. |
-| Existing code and assets | Open-source libraries above; the Vite React template; shadcn/ui component source. Sample call audio generated during the hackathon with text-to-speech. |
-| AI development tools | Claude Code. Confirm with the team and add every other tool used (the backend test scripts suggest opencode). |
-| Accuracy numbers | None measured as a rate. One end-to-end run on a 67-second clip flagged the card readback as critical; the app has no scripted data; every call shown was scored by the pipeline. |
+What runs locally, what needs internet, the models, tools, assets and AI development
+tools are listed once, in the README at the repo root. Keep that one true to the code.

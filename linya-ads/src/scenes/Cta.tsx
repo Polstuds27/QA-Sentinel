@@ -1,6 +1,6 @@
 import React from "react";
 import { AbsoluteFill } from "remotion";
-import { CAPTION_BAND, colors, TAGLINE, TEAM } from "../theme";
+import { CAPTION_BAND, colors, CREDIT, TAGLINE } from "../theme";
 import { Logo } from "../components/Logo";
 import { Headline } from "../components/Headline";
 import { enter, Rise, useClock } from "../components/motion";
@@ -50,7 +50,7 @@ export const Cta: React.FC = () => {
             color: colors.mutedForeground,
           }}
         >
-          {TEAM}
+          {CREDIT}
         </Rise>
       </AbsoluteFill>
       <Sfx clock={clock} at={s + 0.3} name="resolve" />

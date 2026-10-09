@@ -3,14 +3,25 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Spinner } from "@/components/ui/spinner"
+import { STATUS_LABEL } from "@/lib/scorecard"
 import type { Agent, Recording } from "@/lib/server"
+
+// What a recording can be filtered by: where it is in the queue, or how its call scored.
+const STATUS_FILTERS: Array<{ value: string; label: string; matches: (r: Recording) => boolean }> = [
+  { value: "", label: "All statuses", matches: () => true },
+  { value: "green", label: STATUS_LABEL.green, matches: (r) => r.status === "scored" && r.callStatus === "green" },
+  { value: "amber", label: STATUS_LABEL.amber, matches: (r) => r.status === "scored" && r.callStatus === "amber" },
+  { value: "red", label: STATUS_LABEL.red, matches: (r) => r.status === "scored" && r.callStatus === "red" },
+  { value: "waiting", label: "Waiting or scoring", matches: (r) => r.status === "uploaded" || r.status === "processing" },
+  { value: "failed", label: "Could not be scored", matches: (r) => r.status === "failed" },
+]
 
 // Recordings sent in from phones, newest first: waiting → being scored → scored.
 function PhoneUploads({
   recordings,
   agents,
   stage,
-  aiOn,
+  aiReady,
   onOpen,
   onRetry,
 }: {
@@ -18,17 +29,21 @@ function PhoneUploads({
   agents: Agent[]
   /** What the recording being scored is doing right now. */
   stage: string
-  aiOn: boolean
+  /** False when the scoring model cannot be reached. */
+  aiReady: boolean
   onOpen: (callId: string) => void
   onRetry: (recording: Recording) => void
 }) {
   const [agentId, setAgentId] = useState("")
-  const shown = recordings.filter((r) => !agentId || r.agentId === agentId)
+  const [status, setStatus] = useState("")
+  const statusFilter = STATUS_FILTERS.find((f) => f.value === status) ?? STATUS_FILTERS[0]
+  const shown = recordings.filter((r) => (!agentId || r.agentId === agentId) && statusFilter.matches(r))
   const waiting = recordings.filter((r) => r.status === "uploaded").length
 
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
         <Field orientation="horizontal" className="w-auto">
           <FieldLabel htmlFor="upload-agent">Agent</FieldLabel>
           <select
@@ -43,10 +58,24 @@ function PhoneUploads({
             ))}
           </select>
         </Field>
-        {waiting > 0 && !aiOn && <p className="label text-destructive">{waiting} waiting. Tick Local AI to start scoring them.</p>}
+        <Field orientation="horizontal" className="w-auto">
+          <FieldLabel htmlFor="upload-status">Status</FieldLabel>
+          <select
+            id="upload-status"
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+            className="h-10 border border-input bg-background px-3 text-base transition-colors duration-200 hover:border-foreground md:text-sm"
+          >
+            {STATUS_FILTERS.map((f) => (
+              <option key={f.value} value={f.value}>{f.label}</option>
+            ))}
+          </select>
+        </Field>
+        </div>
+        {waiting > 0 && !aiReady && <p className="label text-destructive">{waiting} waiting. Start Ollama to score them.</p>}
       </div>
       {shown.length === 0 ? (
-        <p className="text-muted-foreground">Nothing has been sent from a phone yet.</p>
+        <p className="text-muted-foreground">{recordings.length === 0 ? "Nothing has been sent from a phone yet." : "No recordings match these filters."}</p>
       ) : (
         <ul className="border-b border-border">
           {shown.map((r) => (
@@ -67,7 +96,7 @@ function PhoneUploads({
                 )}
                 {r.status === "scored" && (
                   <>
-                    {r.callStatus && <Badge variant={r.callStatus === "red" ? "destructive" : r.callStatus}>{r.score} / 100</Badge>}
+                    {r.callStatus && <Badge variant={r.callStatus === "red" ? "destructive" : r.callStatus}>{r.score == null ? STATUS_LABEL.amber : `${r.score} / 100`}</Badge>}
                     {r.callId && <Button size="sm" variant="outline" onClick={() => onOpen(r.callId!)}>Open</Button>}
                   </>
                 )}

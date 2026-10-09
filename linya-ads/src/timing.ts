@@ -13,13 +13,12 @@ export const TRANSITION_SECONDS = 0.5;
 // runs to DURATION_SECONDS, so a shorter voiceover just leaves it on screen for longer.
 export const SCENES = [
   { id: "hook", start: 0 },
-  { id: "problem", start: 6 },
-  { id: "logoReveal", start: 16 },
-  { id: "upload", start: 20 },
-  { id: "transcribe", start: 26 },
-  { id: "score", start: 34 },
-  { id: "whyLocal", start: 42 },
-  { id: "cta", start: 54 },
+  { id: "problem", start: 3.2 },
+  { id: "logoReveal", start: 9.6 },
+  { id: "demo", start: 12 },
+  { id: "offline", start: 44 },
+  { id: "local", start: 48 },
+  { id: "cta", start: 53.5 },
 ] as const;
 
 export type SceneId = (typeof SCENES)[number]["id"];
@@ -27,12 +26,43 @@ export type SceneId = (typeof SCENES)[number]["id"];
 // Moments inside a scene that should land on a line of the voiceover, also in seconds
 // of the finished video.
 export const CUES = {
-  // Problem: the headline moves from "too many calls" to "sensitive data".
-  problemPrivacy: 11,
-  // Why local: the wifi icon switches off.
-  wifiOff: 43.2,
-  // Why local: one statement per beat.
-  whyLocalBeats: [42.4, 46.4, 50.4],
+  // Problem: three beats. Too many calls to hear; the one that breaks a rule is
+  // missed; and cloud AI would mean uploading the audio.
+  problemMissed: 5.4,
+  problemPrivacy: 7.5,
+
+  // Demo: when each part of the recorded walk-through starts. The footage is cut to
+  // fit; waiting is sped up to fill the time given here.
+  // The queue row works through the call (sped up).
+  demoProcess: 13.5,
+  // The scored call is opened (sped up).
+  demoOpen: 16,
+  // Playback starts and the transcript follows the audio. One unbroken stretch at
+  // real speed from here to demoRedact.
+  demoTranscript: 17,
+  // The score and status.
+  demoScore: 21.4,
+  // The failed checks and their quoted evidence.
+  demoEvidence: 23.8,
+  // The flag on the waveform is clicked (0.8 s after this) and playback jumps.
+  demoFlag: 26.8,
+  // The redacted card number in the transcript.
+  demoRedact: 30,
+  // A coaching note is generated.
+  demoCoaching: 32,
+  // Export PDF is clicked and the exported report is shown.
+  demoExport: 34.2,
+  // The rest of the app, a moment each: the scorecard editor, phone uploads, the
+  // agent dashboard.
+  demoScorecards: 39.4,
+  demoPhones: 41,
+  demoDashboard: 42.5,
+
+  // Offline: the same upload with the internet blocked, sped up, ending on the calls
+  // list at real speed.
+  offlineProcess: 45,
+  offlineList: 47,
+  offlineHold: 47.7,
 } as const;
 
 export const toFrames = (seconds: number, fps: number) =>

@@ -38,6 +38,9 @@ export type CallStatus = "green" | "amber" | "red";
 /** What each status is called on screen and in exports. The colour carries the same meaning. */
 export const STATUS_LABEL: Record<CallStatus, string> = { green: "Passed", amber: "Needs review", red: "Failed" };
 
+/** True when a call was detected as anything other than English only ("en"). */
+export const notInEnglish = (languages?: string[]) => !!languages?.some((code) => code !== "en");
+
 export function scoreCall(checks: Check[], results: CheckResult[]): { score: number; status: CallStatus } {
   const byId = new Map(results.map((r) => [r.check_id, r]));
   let earned = 0;
@@ -54,4 +57,39 @@ export function scoreCall(checks: Check[], results: CheckResult[]): { score: num
   let status: CallStatus = score >= 85 ? "green" : score >= 70 ? "amber" : "red";
   if (criticalFail) status = "red";
   return { score, status };
+}
+
+/** An analyst's verdicts per check, keyed "callId:checkId". */
+export type Decisions = Record<string, Verdict>;
+
+export interface Grade {
+  /** Null while the call is waiting for an analyst. */
+  score: number | null;
+  status: CallStatus;
+  /** The verdicts that count: the model's, or the analyst's on a call scored by hand. */
+  results: CheckResult[];
+  /** True when the call is scored by an analyst instead of the model. */
+  byHand: boolean;
+  /** Checks the analyst has not marked yet. */
+  pending: number;
+}
+
+/** Shown on screen and in exports while a call that is not in English waits for its review. */
+export const NOT_ENGLISH_NOTE = "Not in English: Linewise scores English calls only for now. Mark each check as Pass, Fail or N/A to score this call by hand.";
+/** And once every check has been marked. */
+export const BY_HAND_NOTE = "Not in English: scored by an analyst, not by the model.";
+
+// A call's score and status. Scoring is tuned for English (prompts, keyword lists, the
+// eval set), so the model's verdicts on a call in any other language are not used: that
+// call is scored by hand. It stays unscored and amber, "Needs review", until an analyst
+// has marked every check, and then takes its score from those marks alone.
+export function gradeCall(call: { id: string; results: CheckResult[]; languages?: string[] }, checks: Check[], decisions: Decisions): Grade {
+  if (!notInEnglish(call.languages)) return { ...scoreCall(checks, call.results), results: call.results, byHand: false, pending: 0 };
+  const results = checks.flatMap((c): CheckResult[] => {
+    const verdict = decisions[`${call.id}:${c.id}`];
+    return verdict ? [{ check_id: c.id, verdict, severity: c.critical ? "critical" : "normal" }] : [];
+  });
+  const pending = checks.length - results.length;
+  if (pending > 0) return { score: null, status: "amber", results, byHand: true, pending };
+  return { ...scoreCall(checks, results), results, byHand: true, pending: 0 };
 }

@@ -2,7 +2,7 @@
 // before the SQLite database on the server. It is now the fallback for when the server is
 // not running, and the source that store.ts copies old calls from. See store.ts.
 import { db } from "./db";
-import { BANK_SUPPORT_V2, type Check } from "./scorecard";
+import { BANK_SUPPORT_V2, type Check, type Decisions, type Verdict } from "./scorecard";
 import type { DemoCall } from "../mock";
 
 // The first scored call is No. 1. A database that already has calls carries on from its highest.
@@ -78,7 +78,7 @@ export async function loadAICalls(): Promise<DemoCall[]> {
       lines: lines.map((l) => ({ time: l.time, speaker: l.speaker, text: l.text, words: l.words })),
       results: rows.map((r) => ({
         check_id: r.check_id,
-        verdict: r.verdict as "pass" | "fail" | "not_applicable",
+        verdict: r.verdict as Verdict | "not_applicable",
         severity: r.severity as "critical" | "normal",
         speaker: r.speaker as "agent" | "customer" | undefined,
         timestamp: r.timestamp,
@@ -102,7 +102,7 @@ export async function deleteAICall(callId: string): Promise<void> {
 }
 
 // Analyst confirm/dismiss: upserts the override and rewrites the stored verdict.
-export async function setOverride(callId: string, checkId: string, verdict: "pass" | "fail"): Promise<void> {
+export async function setOverride(callId: string, checkId: string, verdict: Verdict): Promise<void> {
   await db.transaction("rw", db.results, db.overrides, async () => {
     await db.overrides.where("[callId+check_id]").equals([callId, checkId]).delete();
     await db.overrides.add({ callId, check_id: checkId, verdict, decidedAt: Date.now() });
@@ -112,9 +112,9 @@ export async function setOverride(callId: string, checkId: string, verdict: "pas
 }
 
 // Latest analyst decision per check, keyed "callId:checkId".
-export async function loadOverrides(): Promise<Record<string, "pass" | "fail">> {
+export async function loadOverrides(): Promise<Decisions> {
   const rows = await db.overrides.orderBy("id").toArray();
-  return Object.fromEntries(rows.map((r) => [`${r.callId}:${r.check_id}`, r.verdict as "pass" | "fail"]));
+  return Object.fromEntries(rows.map((r) => [`${r.callId}:${r.check_id}`, r.verdict as Verdict]));
 }
 
 export async function getScorecard(): Promise<Check[]> {

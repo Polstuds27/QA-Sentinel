@@ -20,7 +20,7 @@ iPhone (Notes → Share → Send to Linewise)
 Upload server on the QA laptop   (server/, port 8787)
         │  stores the file, tags it with the agent, puts it in the queue
         ▼
-Linewise app on the QA laptop       (Local AI on)
+Linewise app on the QA laptop       (Ollama running)
            takes one recording at a time → transcribe → redact → score
 ```
 
@@ -97,7 +97,7 @@ In **Notes**, open the note with the call recording, share the audio, and choose
 not). In Linewise, the recording appears under **Calls → Sent from phones** as Waiting, then
 scoring, then with its score and an **Open** button.
 
-Recordings are only scored while **Local AI** is ticked. If it is off, they wait.
+Recordings are only scored while Ollama is running (the header says "Local AI ready"). If it is not, they wait.
 
 ## On a MacBook
 
@@ -176,7 +176,7 @@ shortcut shows in its notification.
 
 ## End-to-end checklist (two or more iPhones)
 
-1. [ ] Laptop: `ollama serve`, `npm run whisper`, `npm run server`, `npm run dev` all running; Local AI ticked.
+1. [ ] Laptop: `ollama serve`, `npm run whisper`, `npm run server`, `npm run dev` all running; the header says "Local AI ready".
 2. [ ] Agents tab: add Agent A and Agent B; each shows a link and a QR code.
 3. [ ] `curl …/api/ping` with A's token from the laptop answers "Connected to Linewise as A".
 4. [ ] iPhone A and iPhone B on the same Wi-Fi: open `http://<laptop address>:8787/api/ping` in Safari. A reply of "not registered" is a pass: it proves the phone can reach the laptop.
@@ -188,7 +188,7 @@ shortcut shows in its notification.
 10. [ ] iPhone A shares the first recording again. Notification says Linewise already has it; no second entry appears.
 11. [ ] Filter "Sent from phones" by Agent B: only B's recordings show.
 12. [ ] Agents tab: Revoke Agent B. iPhone B shares a recording: notification says access was turned off.
-13. [ ] Untick Local AI, send a recording: it waits. Tick it again: it is scored.
+13. [ ] Stop Ollama, send a recording: it waits. Start Ollama again: it is scored.
 14. [ ] If a tunnel will be used: start it, save its address, re-paste the link on one phone on mobile data, send a recording.
 15. [ ] Mac: run the shortcut from the Share menu on an audio file.
 

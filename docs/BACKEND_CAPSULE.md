@@ -61,7 +61,7 @@ ollama serve   # keep running while the app runs
 cd client; npm install; npm run dev   # app at http://localhost:5173
 ```
 
-Flip **Local AI** on in the app header (it health-checks Ollama first), upload audio,
+Wait for the app header to say **Local AI ready** (it checks Ollama by itself), upload audio,
 hit **Transcribe & score**.
 
 ## 3. Key files
@@ -80,7 +80,7 @@ hit **Transcribe & score**.
 | `src/lib/agents.ts` | Per-agent aggregates for the dashboard. |
 | `scripts/phase0-whisper.mjs` | Standalone Whisper check (Node, CPU). |
 | `scripts/phase0-ollama.mjs [model]` | Standalone verdict check + quote-guard demo. |
-| `scripts/phase1-e2e.mjs` | Full browser E2E (toggle → upload → transcribe → score → assert). Set `PHASE1_OFFLINE=1` for the Wi-Fi-off variant. |
+| `scripts/phase1-e2e.mjs` | Full browser E2E (wait for "Local AI ready" → upload → transcribe → score → assert). Set `PHASE1_OFFLINE=1` for the Wi-Fi-off variant. |
 | `phase0.html` | WebLLM browser harness (currently fails on this iGPU — expected). |
 
 ## 4. Contracts your code must honor
@@ -109,7 +109,7 @@ node scripts/phase0-ollama.mjs qwen2.5:3b        # one verdict + guard
 node scripts/phase1-e2e.mjs                       # whole piece in headless Chrome
 ```
 
-Manual: toggle on → upload `public/demo-audio/call-sample.wav` → Transcribe & score →
+Manual: wait for "Local AI ready" → upload `public/demo-audio/call-sample.wav` → Transcribe & score →
 expect card-readback CRIT; reload page → call persists (DevTools → IndexedDB → `qa-sentinel`).
 
 ## 7. Known issues (measured, with workarounds)

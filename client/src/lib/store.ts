@@ -9,6 +9,7 @@
 // which is how it worked before. The first time the server is found, calls already in the
 // browser are copied into the database; the browser's copy is left in place.
 import type { DemoCall } from "../mock";
+import type { Decisions, Verdict } from "./scorecard";
 import * as local from "./store.local";
 import type { Check } from "./scorecard";
 
@@ -106,14 +107,14 @@ export async function deleteAICall(callId: string): Promise<void> {
   notes.delete(callId);
 }
 
-export async function setOverride(callId: string, checkId: string, verdict: "pass" | "fail"): Promise<void> {
+export async function setOverride(callId: string, checkId: string, verdict: Verdict): Promise<void> {
   if (!(await onServer())) return local.setOverride(callId, checkId, verdict);
   await api(`/calls/${encodeURIComponent(callId)}/decision`, "POST", { checkId, verdict });
 }
 
-export async function loadOverrides(): Promise<Record<string, "pass" | "fail">> {
+export async function loadOverrides(): Promise<Decisions> {
   if (!(await onServer())) return local.loadOverrides();
-  return (await api<{ decisions: Record<string, "pass" | "fail"> }>("/decisions")).decisions;
+  return (await api<{ decisions: Decisions }>("/decisions")).decisions;
 }
 
 export async function getScorecard(): Promise<Check[]> {

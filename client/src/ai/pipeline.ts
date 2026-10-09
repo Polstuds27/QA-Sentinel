@@ -15,27 +15,6 @@ import { NATIVE_WHISPER_NAME, nativeWhisperUp } from "./native-whisper";
 // "Xenova/whisper-small" → "Whisper small", for the progress text.
 const BROWSER_WHISPER_NAME = `${WHISPER.id.split("/")[1].replace("whisper-", "Whisper ")} (in browser)`;
 
-const FLAG_KEY = "qa-ai-enabled";
-
-export function isAIEnabled(): boolean {
-  try {
-    return localStorage.getItem(FLAG_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-export function setAIEnabled(v: boolean): void {
-  try {
-    localStorage.setItem(FLAG_KEY, v ? "1" : "0");
-  } catch {
-    // private mode — toggle just won't persist
-  }
-}
-
-// Back-compat for the header badge; prefer isAIEnabled() in new code.
-export const AI_ENABLED = false as const;
-
 export type PipelineStage = "decoding" | "transcribing" | "redacting" | "scoring" | "done" | "error";
 
 export interface PipelineProgress {

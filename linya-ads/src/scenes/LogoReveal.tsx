@@ -8,7 +8,7 @@ import { Sfx } from "../components/Sfx";
 import { Wall } from "../components/Wall";
 
 const MARK = 220;
-const WORDMARK = "Linya";
+const WORDMARK = "Linewise";
 
 export const LogoReveal: React.FC = () => {
   const clock = useClock("logoReveal");
@@ -16,7 +16,7 @@ export const LogoReveal: React.FC = () => {
 
   // The two lines draw, then the dot lands with a little weight.
   const dot = spring({
-    frame: (clock.t - (s + 1.05)) * clock.fps,
+    frame: (clock.t - (s + 0.75)) * clock.fps,
     fps: clock.fps,
     config: { damping: 14, stiffness: 170, mass: 0.7 },
   });
@@ -36,8 +36,8 @@ export const LogoReveal: React.FC = () => {
         >
           <LogoMark
             size={MARK}
-            vertical={enter(clock, s + 0.3, 0.5)}
-            horizontal={enter(clock, s + 0.65, 0.5)}
+            vertical={enter(clock, s + 0.1, 0.45)}
+            horizontal={enter(clock, s + 0.4, 0.45)}
             dot={dot}
           />
           <span
@@ -49,7 +49,7 @@ export const LogoReveal: React.FC = () => {
             }}
           >
             {WORDMARK.split("").map((letter, i) => {
-              const shown = enter(clock, s + 1.15 + i * 0.06);
+              const shown = enter(clock, s + 0.8 + i * 0.045);
               return (
                 <span
                   key={i}
@@ -67,14 +67,14 @@ export const LogoReveal: React.FC = () => {
         </div>
         <Headline
           clock={clock}
-          at={s + 1.9}
+          at={s + 1.4}
           size={66}
           style={{ fontWeight: 500, letterSpacing: "-0.025em" }}
         >
           {TAGLINE}
         </Headline>
       </AbsoluteFill>
-      <Sfx clock={clock} at={s + 1.05} name="chime" />
+      <Sfx clock={clock} at={s + 0.75} name="chime" />
     </Wall>
   );
 };

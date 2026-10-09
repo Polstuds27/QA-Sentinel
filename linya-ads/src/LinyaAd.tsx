@@ -15,17 +15,16 @@ import { Captions } from "./components/Captions";
 import { Sfx } from "./components/Sfx";
 import { Soundtrack } from "./components/Soundtrack";
 import { Cta } from "./scenes/Cta";
+import { Demo } from "./scenes/Demo";
 import { Hook } from "./scenes/Hook";
+import { Local } from "./scenes/Local";
 import { LogoReveal } from "./scenes/LogoReveal";
+import { Offline } from "./scenes/Offline";
 import { Problem } from "./scenes/Problem";
-import { Score } from "./scenes/Score";
-import { Transcribe } from "./scenes/Transcribe";
-import { Upload } from "./scenes/Upload";
-import { WhyLocal } from "./scenes/WhyLocal";
 import { transcript } from "./transcript";
 
-// Each scene, and how it arrives. The three how-it-works steps fade into each other so
-// the app frame holds still while its contents change.
+// Each scene, and how it arrives. The demo and offline scenes are real footage of the
+// app; the rest is animation.
 const SCENES: {
   id: SceneId;
   component: React.FC;
@@ -34,10 +33,9 @@ const SCENES: {
   { id: "hook", component: Hook },
   { id: "problem", component: Problem, enters: "slide-left" },
   { id: "logoReveal", component: LogoReveal, enters: "fade" },
-  { id: "upload", component: Upload, enters: "slide-up" },
-  { id: "transcribe", component: Transcribe, enters: "fade" },
-  { id: "score", component: Score, enters: "fade" },
-  { id: "whyLocal", component: WhyLocal, enters: "slide-left" },
+  { id: "demo", component: Demo, enters: "slide-up" },
+  { id: "offline", component: Offline, enters: "fade" },
+  { id: "local", component: Local, enters: "fade" },
   { id: "cta", component: Cta, enters: "fade" },
 ];
 

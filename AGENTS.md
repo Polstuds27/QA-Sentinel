@@ -2,8 +2,8 @@
 
 Linewise is the product's name. It was QA Sentinel until Oct 9, 2026, then Linya until
 Oct 10 (old database and model folders are renamed automatically on start). The concept PDF, the
-repo folder, the GitHub repo and some internal keys (`qa-sentinel` IndexedDB name,
-`qa-ai-enabled` localStorage key) still use the old name; use Linewise everywhere new. The promo video project is still the folder `linya-ads/`.
+repo folder, the GitHub repo and some internal keys (`qa-sentinel` IndexedDB name)
+still use the old name; use Linewise everywhere new. The promo video project is still the folder `linya-ads/`.
 
 Local-AI call-center QA (AppBuildersPH Hackathon 2026, Local AI track): batch-upload
 call recordings, transcribe + score + flag every call on-device, export redacted reports.
@@ -26,8 +26,10 @@ Submission due 10:00 AM Oct 10 — working product over slides.
   `pipeline.ts` (dispatcher, two-tier quote guard, deterministic critical override). A
   verdict that fails the quote guard is asked for once more, then left unscored as
   "Needs manual review" instead of failing the whole call.
-  Behind the in-app Local AI toggle (`localStorage qa-ai-enabled`). OFF = stored calls
-  can be read but nothing new is scored; ON = uploads and phone recordings are scored.
+  There is no on/off switch (removed Oct 10): the app checks Ollama on load and every 5 s
+  and the header shows "Local AI ready (Whisper + Ollama 3B)" or "Ollama is not running:
+  start it to score calls". Ready = uploads and phone recordings are scored; not running =
+  stored calls can still be read and new recordings wait.
 - `client/src/lib/` — `scorecard.ts`, `pii.ts` (`redactPII` + `findCardHits`: any run
   of 13–19 digits is redacted and flagged even if Luhn fails, because Whisper mishears
   digits; `valid` says whether the checksum matched),
@@ -60,7 +62,8 @@ Submission due 10:00 AM Oct 10 — working product over slides.
   (card read back, no identity check) and should score 62 with the preset scorecard.
 - `client/scripts/` — `phase0-*.mjs` (model checks), `phase1-e2e.mjs` (full
   upload→transcribe→score browser test; it finds elements by `data-testid` and by the
-  header text "Local AI on (Whisper + Ollama 3B)", so keep those when restyling).
+  header text "Local AI ready (Whisper + Ollama 3B)", so keep those when restyling;
+  `linya-ads/scripts/record-demo.mjs` waits for the same text).
   `phase0.html` = WebLLM harness (blocked HW).
 - `docs/LOCAL_AI_PLAN.md` — phased local AI/backend plan. `docs/BACKEND_CAPSULE.md` —
   backend notes.
@@ -71,7 +74,7 @@ Submission due 10:00 AM Oct 10 — working product over slides.
   `scorecards`, `settings`. Audio is files beside it: `server/data/uploads/` (from phones,
   named by SHA-256) and `server/data/calls/` (dragged into the app, named by call id).
   (2) Phone uploads: one token per agent, `POST /api/uploads`, duplicates dropped by hash,
-  a queue the app (Local AI on) works through one at a time via the Vite `/api` proxy.
+  a queue the app (while Ollama is reachable) works through one at a time via the Vite `/api` proxy.
   `server/data/` is git-ignored (tokens and recordings). Admin routes answer only to the
   laptop itself and refuse anything that came through a tunnel.
 - `client/src/lib/store.ts` — the app's storage. Uses the server's database when it is
@@ -93,7 +96,7 @@ The npm commands are the same in zsh, bash and PowerShell.
 ```sh
 cd client; npm install
 npm run models                             # once per machine: fetch speech models (needs internet)
-npm run dev                                # the app; tick Local AI to score recordings
+npm run dev                                # the app; scores recordings whenever Ollama is running
 npm run build                              # tsc -b + vite build (must pass)
 npm run lint                               # oxlint
 npm run whisper                            # optional: native Whisper large-v3-turbo (macOS, whisper.cpp)
@@ -106,7 +109,7 @@ npm run eval:redaction                     # redaction regression check (needs o
 `phase1-e2e.mjs` has a Windows Chrome path and profile directory hard-coded; change them
 to run it on another machine.
 
-Ollama (required when the AI toggle is on): `ollama serve` must run with
+Ollama (required to score anything): `ollama serve` must run with
 `OLLAMA_ORIGINS` including `http://localhost:5173` (on Windows set via `setx`, then
 restart the server; recent Ollama versions allow `http://localhost:*` by default).
 Models: `qwen2.5:3b` for scoring.
@@ -203,7 +206,7 @@ Its navy/teal mockups are superseded by `client/DESIGN.md`; everything else stan
 ## AI/backend plan — Phase 1–5 DONE (adapted), rest gated
 
 Shipped as working pieces: Whisper worker → PII engine → Ollama 3B scoring →
-quote guard → deterministic critical override, behind the in-app toggle; provider
+quote guard → deterministic critical override; provider
 abstraction (`backend.ts`); Dexie v2 persistence (calls, results, overrides,
 scorecards, coaching); redacted CSV + PDF export; coaching notes; agent dashboard.
 E2E proven (`phase1-e2e.mjs`): real 67 s clip transcribed and scored, card-readback
@@ -239,8 +242,9 @@ working backend because WebLLM is blocked on the test hardware.
 ## Submission (10:00 AM Oct 10, one submission, no extensions)
 
 - Public GitHub repo by the deadline; judges review it as of then.
-- README with setup steps for judges and the disclosures. Today that is
-  `client/README.md`; there is no README at the repo root, where judges land first.
+- README with setup steps for judges and the disclosures: `README.md` at the repo root
+  (problem, description, models, tools, assets, how to run, limits). `client/README.md`
+  is developer notes and points to it; keep the disclosures in the root one only.
 - About 1 minute of demo video, and an X / LinkedIn post tagging Devin / Cognition with
   #AppBuildersPH.
 - List only models and tools actually used. Fake benchmarks can get a result disputed.

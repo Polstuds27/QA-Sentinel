@@ -1,0 +1,590 @@
+{
+  "recordedAt": "2026-10-09T23:03:41.960Z",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "online": {
+    "file": "demo/online.mp4",
+    "fps": 30,
+    "seconds": 68.333,
+    "events": [
+      {
+        "at": 0.685,
+        "event": "upload-area",
+        "box": {
+          "x": 875,
+          "y": 144,
+          "width": 693,
+          "height": 192
+        }
+      },
+      {
+        "at": 1.605,
+        "event": "dropped"
+      },
+      {
+        "at": 1.61,
+        "event": "queued",
+        "box": {
+          "x": 875,
+          "y": 360,
+          "width": 693,
+          "height": 61
+        }
+      },
+      {
+        "at": 3.394,
+        "event": "click",
+        "what": "Transcribe & score",
+        "x": 1489,
+        "y": 391,
+        "box": {
+          "x": 1410,
+          "y": 373,
+          "width": 158,
+          "height": 36
+        }
+      },
+      {
+        "at": 3.525,
+        "event": "status",
+        "status": "decoding: Decoding + resampling to 16 kHz mono"
+      },
+      {
+        "at": 3.609,
+        "event": "status",
+        "status": "transcribing: Whisper large-v3-turbo: 2 channels"
+      },
+      {
+        "at": 6.362,
+        "event": "status",
+        "status": "redacting: Finding names and other customer details to hide"
+      },
+      {
+        "at": 6.527,
+        "event": "status",
+        "status": "scoring: Ollama qwen2.5:3b (localhost CPU): 1/7 greeting"
+      },
+      {
+        "at": 6.943,
+        "event": "status",
+        "status": "scoring: Ollama qwen2.5:3b (localhost CPU): 2/7 verify_identity"
+      },
+      {
+        "at": 7.539,
+        "event": "status",
+        "status": "scoring: Ollama qwen2.5:3b (localhost CPU): 3/7 empathy"
+      },
+      {
+        "at": 8.457,
+        "event": "status",
+        "status": "scoring: Ollama qwen2.5:3b (localhost CPU): 5/7 no_refund_promise"
+      },
+      {
+        "at": 9.128,
+        "event": "status",
+        "status": "scoring: Ollama qwen2.5:3b (localhost CPU): 6/7 further_help"
+      },
+      {
+        "at": 9.626,
+        "event": "status",
+        "status": "scoring: Ollama qwen2.5:3b (localhost CPU): 7/7 closing"
+      },
+      {
+        "at": 10.711,
+        "event": "status",
+        "status": "done — open in Calls list below"
+      },
+      {
+        "at": 13.021,
+        "event": "call-row",
+        "box": {
+          "x": 875,
+          "y": 503,
+          "width": 649,
+          "height": 99
+        }
+      },
+      {
+        "at": 14.378,
+        "event": "click",
+        "what": "the scored call",
+        "x": 1200,
+        "y": 553,
+        "box": {
+          "x": 875,
+          "y": 503,
+          "width": 649,
+          "height": 99
+        }
+      },
+      {
+        "at": 16.138,
+        "event": "call-open",
+        "box": {
+          "x": 1313,
+          "y": 182,
+          "width": 183,
+          "height": 48
+        },
+        "score": "62 / 100",
+        "title": "Call No. 1"
+      },
+      {
+        "at": 16.144,
+        "event": "detail",
+        "player": {
+          "x": 352,
+          "y": 270,
+          "width": 1216,
+          "height": 98
+        },
+        "transcript": {
+          "x": 352,
+          "y": 463,
+          "width": 693,
+          "height": 1038
+        },
+        "scorecard": {
+          "x": 1085,
+          "y": 463,
+          "width": 483,
+          "height": 1038
+        },
+        "checks": [
+          {
+            "verdict": "Pass",
+            "box": {
+              "x": 1085,
+              "y": 511,
+              "width": 483,
+              "height": 71
+            },
+            "evidence": null
+          },
+          {
+            "verdict": "Critical",
+            "box": {
+              "x": 1085,
+              "y": 581,
+              "width": 483,
+              "height": 129
+            },
+            "evidence": {
+              "x": 1085,
+              "y": 625,
+              "width": 483,
+              "height": 38
+            }
+          },
+          {
+            "verdict": "Pass",
+            "box": {
+              "x": 1085,
+              "y": 711,
+              "width": 483,
+              "height": 48
+            },
+            "evidence": null
+          },
+          {
+            "verdict": "Critical",
+            "box": {
+              "x": 1085,
+              "y": 759,
+              "width": 483,
+              "height": 148
+            },
+            "evidence": {
+              "x": 1085,
+              "y": 802,
+              "width": 483,
+              "height": 57
+            }
+          },
+          {
+            "verdict": "Pass",
+            "box": {
+              "x": 1085,
+              "y": 907,
+              "width": 483,
+              "height": 48
+            },
+            "evidence": null
+          },
+          {
+            "verdict": "Pass",
+            "box": {
+              "x": 1085,
+              "y": 955,
+              "width": 483,
+              "height": 48
+            },
+            "evidence": null
+          },
+          {
+            "verdict": "Pass",
+            "box": {
+              "x": 1085,
+              "y": 1002,
+              "width": 483,
+              "height": 71
+            },
+            "evidence": null
+          }
+        ],
+        "engine": "Transcribed with Whisper large-v3-turbo and scored on this laptop. Nothing was sent anywhere else.  Click any timestamp or flag tick to play from there."
+      },
+      {
+        "at": 17.711,
+        "event": "click",
+        "what": "Play",
+        "x": 372,
+        "y": 319,
+        "box": {
+          "x": 352,
+          "y": 299,
+          "width": 40,
+          "height": 40
+        }
+      },
+      {
+        "at": 17.712,
+        "event": "playing"
+      },
+      {
+        "at": 27.019,
+        "event": "flags",
+        "labels": [
+          "Jump to 00:06: Verifies identity before discussing the account",
+          "Jump to 00:14: Never reads back a full card number"
+        ]
+      },
+      {
+        "at": 27.694,
+        "event": "click",
+        "what": "Jump to 00:14: Never reads back a full card number",
+        "x": 912,
+        "y": 319,
+        "box": {
+          "x": 904,
+          "y": 287,
+          "width": 16,
+          "height": 64
+        }
+      },
+      {
+        "at": 27.695,
+        "event": "jumped"
+      },
+      {
+        "at": 33.38,
+        "event": "click",
+        "what": "Pause",
+        "x": 372,
+        "y": 319,
+        "box": {
+          "x": 352,
+          "y": 299,
+          "width": 40,
+          "height": 40
+        }
+      },
+      {
+        "at": 35.433,
+        "event": "scorecard",
+        "scorecard": {
+          "x": 1085,
+          "y": 150,
+          "width": 483,
+          "height": 1038
+        },
+        "transcript": {
+          "x": 352,
+          "y": 150,
+          "width": 693,
+          "height": 1038
+        },
+        "redacted": {
+          "x": 352,
+          "y": 351,
+          "width": 693,
+          "height": 51
+        },
+        "redactedText": "00:09CustomerIt's [CARD •••• 1111]."
+      },
+      {
+        "at": 40.426,
+        "event": "click",
+        "what": "Generate note",
+        "x": 1153,
+        "y": 884,
+        "box": {
+          "x": 1085,
+          "y": 864,
+          "width": 135,
+          "height": 40
+        }
+      },
+      {
+        "at": 41.412,
+        "event": "coaching",
+        "box": {
+          "x": 1085,
+          "y": 778,
+          "width": 483,
+          "height": 256
+        }
+      },
+      {
+        "at": 45.976,
+        "event": "click",
+        "what": "Export PDF",
+        "x": 1143,
+        "y": 660,
+        "box": {
+          "x": 1085,
+          "y": 640,
+          "width": 116,
+          "height": 40
+        }
+      },
+      {
+        "at": 46.087,
+        "event": "exported",
+        "name": "linewise-call-ai-mv1knupm2-redacted.pdf"
+      },
+      {
+        "at": 52.759,
+        "event": "click",
+        "what": "the Scorecards tab",
+        "x": 1352,
+        "y": 32,
+        "box": {
+          "x": 1306,
+          "y": 12,
+          "width": 92,
+          "height": 40
+        }
+      },
+      {
+        "at": 53.289,
+        "event": "scorecards",
+        "box": {
+          "x": 352,
+          "y": 64,
+          "width": 1216,
+          "height": 648
+        }
+      },
+      {
+        "at": 55.26,
+        "event": "click",
+        "what": "Edit scorecard",
+        "x": 421,
+        "y": 322,
+        "box": {
+          "x": 352,
+          "y": 302,
+          "width": 137,
+          "height": 40
+        }
+      },
+      {
+        "at": 58.176,
+        "event": "click",
+        "what": "the Agents tab",
+        "x": 1453,
+        "y": 32,
+        "box": {
+          "x": 1422,
+          "y": 12,
+          "width": 62,
+          "height": 40
+        }
+      },
+      {
+        "at": 58.757,
+        "event": "phones",
+        "box": {
+          "x": 352,
+          "y": 144,
+          "width": 1216,
+          "height": 619
+        }
+      },
+      {
+        "at": 62.494,
+        "event": "dashboard",
+        "box": {
+          "x": 352,
+          "y": 557,
+          "width": 1216,
+          "height": 347
+        }
+      },
+      {
+        "at": 65.559,
+        "event": "click",
+        "what": "the Export tab",
+        "x": 1538,
+        "y": 32,
+        "box": {
+          "x": 1508,
+          "y": 12,
+          "width": 60,
+          "height": 40
+        }
+      },
+      {
+        "at": 66.101,
+        "event": "export-tab",
+        "box": {
+          "x": 352,
+          "y": 64,
+          "width": 1216,
+          "height": 314
+        }
+      }
+    ],
+    "outside": []
+  },
+  "report": {
+    "pdf": "demo/report.pdf",
+    "image": "demo/report.png",
+    "name": "linewise-call-ai-mv1knupm2-redacted.pdf"
+  },
+  "offline": {
+    "file": "demo/offline.mp4",
+    "fps": 30,
+    "seconds": 18.967,
+    "events": [
+      {
+        "at": 0.633,
+        "event": "upload-area",
+        "box": {
+          "x": 875,
+          "y": 144,
+          "width": 693,
+          "height": 192
+        }
+      },
+      {
+        "at": 1.56,
+        "event": "dropped"
+      },
+      {
+        "at": 1.564,
+        "event": "queued",
+        "box": {
+          "x": 875,
+          "y": 360,
+          "width": 693,
+          "height": 61
+        }
+      },
+      {
+        "at": 3.324,
+        "event": "click",
+        "what": "Transcribe & score",
+        "x": 1489,
+        "y": 391,
+        "box": {
+          "x": 1410,
+          "y": 373,
+          "width": 158,
+          "height": 36
+        }
+      },
+      {
+        "at": 3.441,
+        "event": "status",
+        "status": "decoding: Decoding + resampling to 16 kHz mono"
+      },
+      {
+        "at": 3.522,
+        "event": "status",
+        "status": "transcribing: Whisper large-v3-turbo: 2 channels"
+      },
+      {
+        "at": 6.271,
+        "event": "status",
+        "status": "redacting: Finding names and other customer details to hide"
+      },
+      {
+        "at": 6.361,
+        "event": "status",
+        "status": "scoring: Ollama qwen2.5:3b (localhost CPU): 1/7 greeting"
+      },
+      {
+        "at": 6.857,
+        "event": "status",
+        "status": "scoring: Ollama qwen2.5:3b (localhost CPU): 2/7 verify_identity"
+      },
+      {
+        "at": 7.459,
+        "event": "status",
+        "status": "scoring: Ollama qwen2.5:3b (localhost CPU): 3/7 empathy"
+      },
+      {
+        "at": 8.372,
+        "event": "status",
+        "status": "scoring: Ollama qwen2.5:3b (localhost CPU): 5/7 no_refund_promise"
+      },
+      {
+        "at": 9.039,
+        "event": "status",
+        "status": "scoring: Ollama qwen2.5:3b (localhost CPU): 6/7 further_help"
+      },
+      {
+        "at": 9.534,
+        "event": "status",
+        "status": "scoring: Ollama qwen2.5:3b (localhost CPU): 7/7 closing"
+      },
+      {
+        "at": 10.614,
+        "event": "status",
+        "status": "done — open in Calls list below"
+      },
+      {
+        "at": 12.926,
+        "event": "call-row",
+        "box": {
+          "x": 875,
+          "y": 503,
+          "width": 649,
+          "height": 99
+        }
+      },
+      {
+        "at": 14.292,
+        "event": "click",
+        "what": "the scored call",
+        "x": 1200,
+        "y": 553,
+        "box": {
+          "x": 875,
+          "y": 503,
+          "width": 649,
+          "height": 99
+        }
+      },
+      {
+        "at": 16.046,
+        "event": "call-open",
+        "box": {
+          "x": 1313,
+          "y": 182,
+          "width": 183,
+          "height": 48
+        },
+        "score": "62 / 100",
+        "title": "Call No. 2"
+      }
+    ],
+    "outside": [],
+    "internetBlocked": true
+  },
+  "nativeWhisper": true
+}

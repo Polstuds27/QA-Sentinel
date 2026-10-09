@@ -1,6 +1,6 @@
 // Agent analytics over scored calls: averages, red-call counts, most-missed checks.
 // Feeds the Agents dashboard tab. Pure functions over in-memory calls.
-import { scoreCall, type Check, type CheckResult } from "./scorecard";
+import { gradeCall, scoreCall, type Check, type CheckResult, type Decisions } from "./scorecard";
 
 export interface MissedCheck {
   checkId: string;
@@ -17,13 +17,17 @@ export interface AgentStat {
 }
 
 export function agentStats(
-  calls: Array<{ agent: string; results: CheckResult[] }>,
+  calls: Array<{ id: string; agent: string; results: CheckResult[]; languages?: string[] }>,
   checks: Check[],
+  decisions: Decisions = {},
 ): AgentStat[] {
   const byAgent = new Map<string, Array<CheckResult[]>>();
   for (const c of calls) {
+    // A call still waiting for its review by hand has no score, so it stays out.
+    const grade = gradeCall(c, checks, decisions);
+    if (grade.score === null) continue;
     const list = byAgent.get(c.agent) ?? [];
-    list.push(c.results);
+    list.push(grade.results);
     byAgent.set(c.agent, list);
   }
   const labelOf = (id: string) => checks.find((c) => c.id === id)?.label ?? id;
