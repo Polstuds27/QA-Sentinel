@@ -25,7 +25,10 @@ npm run lint    # oxlint
 
 ## What's implemented (mock data)
 
-- `src/mock.ts` — 3 demo calls: clean, critical Call #147 (62/100 RED), borderline
+- `src/mock.ts` — 3 demo calls: clean, critical Call #147 (62/100 RED), borderline.
+  Each has a recording in `public/samples/` made with macOS text-to-speech by
+  `scripts/make_sample_calls.py`, so the audio bar, timestamps and flag ticks line up.
+  The transcripts and scores are still scripted, not model output.
 - Screens: Upload & queue (file picker + object-URL playback) · Calls list (flagged filter)
   · Call detail hero (redacted transcript, scorecard, click timestamp to seek, confirm/dismiss,
   redacted CSV export) · Scorecard editor (Bank Support v2 weights/critical toggles)
@@ -53,7 +56,7 @@ The hackathon form asks for these. Keep only what is true of the code at the dea
 | Models used | None yet. Planned: Whisper base/small (ONNX), Qwen2.5-3B-Instruct or Llama-3.2-3B-Instruct via WebLLM. |
 | Technologies and frameworks | React, Vite, TypeScript, Tailwind, shadcn/ui, Base UI, Dexie. Add Transformers.js, WebLLM, wavesurfer.js, Recharts and jsPDF only once they are wired. |
 | APIs and cloud services | None. |
-| Existing code and assets | Open-source libraries above; the Vite React template; shadcn/ui component source. |
+| Existing code and assets | Open-source libraries above; the Vite React template; shadcn/ui component source. Sample call audio generated during the hackathon with macOS built-in voices. |
 | AI development tools | Claude Code. Add any others used. |
 | Accuracy numbers | None measured. The three demo calls are scripted mock data, not model output. |
 

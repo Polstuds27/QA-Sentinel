@@ -238,9 +238,11 @@ shadcn/ui components (Base UI, `base-nova`) live in `src/components/ui/` and hav
 
 `AudioPlayer` in `src/components/audio-player.tsx` replaces the browser's audio controls. It is the call drawn as a line, between two hairlines.
 
-- **Track:** `Slider` is a 1px hairline. The played part darkens to foreground and the playhead is a `size-3` cobalt dot that grows slightly on hover and drag.
-- **Flag ticks:** every failed check with a timestamp gets a 1px destructive tick standing on the line at that moment. A tick grows on hover and focus, and clicking it plays from there.
-- **Controls:** an outline icon button for play and pause on the left, a ghost icon button for mute on the right, and the current time and duration as `label` text either side of the track.
+- **Track:** `Slider` is a 1px hairline across a 4rem-tall strip. The played part darkens to foreground and the playhead is a `size-3` cobalt dot that grows slightly on hover and drag.
+- **Waveform:** `Waveform` (`src/components/waveform.tsx`) draws the recording's real loudness as 2px square bars with 2px gaps on a canvas behind the line. The agent's channel rises above the line and the customer's hangs below it, so you can see who is speaking. Played bars are foreground; bars still ahead are muted-foreground at 40%.
+- **Live motion:** while audio plays, the bars within a few steps of the playhead turn cobalt and lift and fall with the loudness of the voice at that instant. This is the one moving thing on the page. It stops when playback pauses and is off under `prefers-reduced-motion`.
+- **Flag ticks:** every failed check with a timestamp gets a 1px destructive line the full height of the strip at that moment. It thickens on hover and focus, and clicking it plays from there.
+- **Controls:** an outline icon button for play and pause, a ghost icon button for mute, and the current time and duration as `label` text. Below `sm` the waveform takes the full width and the controls sit in a row beneath it.
 - **No recording yet:** the controls are disabled and the dot turns muted, but the line still shows the call's length and where its flags are.
 
 ### Call rows and the drop zone
@@ -277,6 +279,7 @@ Motion is sparse and uses `--ease-out-expo` (`cubic-bezier(0.16, 1, 0.3, 1)`).
 | Name | Where | What |
 |---|---|---|
 | `animate-hang` | Tab panels | The panel settles 0.75rem into place and fades in, 0.6s, on tab change |
+| Waveform | Audio player | Bars at the playhead turn cobalt and move with the voice while audio plays |
 | Hover | Buttons, tabs, row dots, inputs | 200ms colour transition |
 
 The animation uses `backwards` fill, so content is visible by default if it never runs. All of it is switched off under `prefers-reduced-motion`.

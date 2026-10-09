@@ -27,7 +27,7 @@ function Slider({
       thumbAlignment="center"
       {...props}
     >
-      <SliderPrimitive.Control className="relative flex w-full cursor-pointer touch-none items-center select-none data-disabled:cursor-default data-horizontal:h-6 data-vertical:h-full data-vertical:min-h-40 data-vertical:w-6 data-vertical:flex-col">
+      <SliderPrimitive.Control className="relative flex w-full cursor-pointer touch-none items-center select-none data-disabled:cursor-default data-horizontal:h-full data-horizontal:min-h-6 data-vertical:h-full data-vertical:min-h-40 data-vertical:w-6 data-vertical:flex-col">
         <SliderPrimitive.Track
           data-slot="slider-track"
           className="relative grow bg-border select-none data-horizontal:h-px data-horizontal:w-full data-vertical:h-full data-vertical:w-px"

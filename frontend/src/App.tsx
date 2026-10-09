@@ -77,7 +77,7 @@ export default function App() {
 
   function seek(ts: string, url?: string) {
     if (url && audioRef.current) {
-      if (audioRef.current.src !== url) audioRef.current.src = url;
+      if (audioRef.current.src !== new URL(url, location.href).href) audioRef.current.src = url;
       audioRef.current.currentTime = toSeconds(ts);
       void audioRef.current.play().catch(() => {});
     }
@@ -109,6 +109,9 @@ export default function App() {
     { id: "agents", label: "Agents" },
     { id: "export", label: "Export" },
   ];
+
+  // A demo call plays its own recording; otherwise fall back to the latest upload.
+  const audioUrl = selected.audio ?? queue[0]?.url;
 
   const flagMarkers = selected.results
     .filter((r) => r.verdict === "fail" && r.timestamp)
@@ -236,20 +239,20 @@ export default function App() {
           <div className="mt-10">
             <AudioPlayer
               audioRef={audioRef}
-              src={queue[0]?.url}
+              src={audioUrl}
               fallbackDuration={toSeconds(selected.duration)}
               markers={flagMarkers}
-              onMarkerClick={(m) => seek(m.ts, queue[0]?.url)}
+              onMarkerClick={(m) => seek(m.ts, audioUrl)}
             />
           </div>
-          <p className="label mt-3 text-muted-foreground">Demo transcripts are built-in. Uploaded files play here after upload; click any timestamp to seek.</p>
+          <p className="label mt-3 text-muted-foreground">Sample recording with computer-generated voices; the transcript and scores are scripted. Click any timestamp or flag tick to play from there.</p>
           <div className="mt-16 grid gap-x-10 gap-y-16 lg:grid-cols-12">
             <div className="lg:col-span-7">
               <h3 className="mb-5 text-xl font-medium tracking-tight">Transcript (PII redacted)</h3>
               <ul className="border-b border-border">
                 {selected.lines.map((l, i) => (
                   <li key={i} className="grid grid-cols-[3rem_4.5rem_1fr] items-baseline gap-x-3 border-t border-border py-3">
-                    <button className="label text-left text-muted-foreground underline underline-offset-4 transition-colors duration-200 hover:text-primary" onClick={() => seek(l.time, queue[0]?.url)}>{l.time}</button>
+                    <button className="label text-left text-muted-foreground underline underline-offset-4 transition-colors duration-200 hover:text-primary" onClick={() => seek(l.time, audioUrl)}>{l.time}</button>
                     <span className="label">{l.speaker}</span>
                     <span className="max-w-[60ch]">{redactPII(l.text)}</span>
                   </li>

@@ -21,10 +21,18 @@ Submission due 10:00 AM Oct 10 — working product over slides.
 - `frontend/src/components/logo.tsx` — the Linya logo (an L with a cobalt dot, plus the
   wordmark). PNG exports and the favicon are in `frontend/public/` (`logo.png`,
   `logo-dark.png`, `logo-mark.png`, `favicon.svg`).
-- `frontend/src/components/audio-player.tsx` — custom player for call detail: hairline
-  track, cobalt playhead, a tick at each flagged timestamp. Plain `<audio>` underneath;
-  `wavesurfer.js` is still unwired.
+- `frontend/src/components/audio-player.tsx` + `waveform.tsx` — custom player for call
+  detail: hairline track, cobalt playhead, a tick at each flagged timestamp, and a canvas
+  waveform decoded from the recording (agent channel above the line, customer below) that
+  moves at the playhead during playback. Plain `<audio>` underneath; `wavesurfer.js` is
+  still unwired and no longer needed for this.
 - `frontend/src/mock.ts` — 3 demo calls (clean, critical #147 62/100 RED, borderline).
+  Transcripts and verdicts are hand-written; line times match the sample recordings.
+- `frontend/public/samples/call-*.m4a` — one recording per demo call, built by
+  `frontend/scripts/make_sample_calls.py` (macOS `say` voices; stereo, agent left,
+  customer right). Synthetic voices on scripted calls: demo data, never a benchmark. If a
+  script changes, re-run it and copy the printed times into `mock.ts`. The calls are 7 to
+  31 seconds long, so the spec's "click 02:13" moment is at 00:14 on Call #147.
 - `frontend/src/lib/` — `scorecard.ts` (Bank Support v2 preset + scorer), `pii.ts`
   (regex + Luhn redaction only), `db.ts` (Dexie `linya` schema, persistence TODO).
 - No backend, no AI workers yet. `dexie`/`wavesurfer.js`/`recharts`/`jspdf` are installed
