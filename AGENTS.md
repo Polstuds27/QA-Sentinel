@@ -63,6 +63,15 @@ Submission due 10:00 AM Oct 10 — working product over slides.
   `phase0.html` = WebLLM harness (blocked HW).
 - `docs/LOCAL_AI_PLAN.md` — phased local AI/backend plan. `docs/BACKEND_CAPSULE.md` —
   backend notes.
+- `server/` — optional upload server (Node, Express, `npm run server` from `frontend/`,
+  port 8787) so agents can send recordings from their iPhones with an Apple Shortcut.
+  It registers agents with one token each, takes `POST /api/uploads`, drops duplicates by
+  SHA-256, and queues files; the app (Local AI on) takes one at a time through the Vite
+  `/api` proxy and scores it with the normal pipeline, under that agent's name. Data is in
+  `server/data/` (git-ignored: tokens and recordings). Admin routes answer only to the
+  laptop itself and refuse anything that came through a tunnel. UI: `devices.tsx` (Agents
+  tab), `phone-uploads.tsx` (Calls tab), `lib/server.ts`. Full guide, shortcut steps, curl
+  and test checklist: `docs/PHONE_UPLOADS.md`. The shortcut has not been run on an iPhone.
 - `linya-ads/` — Remotion project for the promo video. Separate package, not part of the app.
 - Local backend only: Ollama on localhost (qwen2.5:3b) + IndexedDB in the browser.
   No hosted servers, no cloud APIs — audio never leaves the machine.
@@ -80,6 +89,7 @@ npm run dev                                # sample calls until the Local AI tog
 npm run build                              # tsc -b + vite build (must pass)
 npm run lint                               # oxlint
 npm run whisper                            # optional: native Whisper large-v3-turbo (macOS, whisper.cpp)
+npm run server                             # optional: upload server for recordings sent from phones
 node scripts/phase1-e2e.mjs                # whole-piece E2E (needs dev + ollama up)
 npm run eval                               # scoring regression check (needs ollama up)
 npm run eval:redaction                     # redaction regression check (needs ollama up)
@@ -173,6 +183,9 @@ Its navy/teal mockups are superseded by `frontend/DESIGN.md`; everything else st
   agent is both a redaction span and a compliance flag.
 - Hard constraints: no cloud AI APIs, audio never leaves the machine, offline after first
   load (the demo runs in airplane mode).
+- Phone uploads keep that promise only on the same Wi-Fi or a hotspot, where audio goes
+  phone → laptop. A Cloudflare or ngrok tunnel sends it through that company's servers:
+  say so if it is used, and do not demo the privacy claim over a tunnel.
 - Spec scope, for reference. MVP: batch upload + queue → local transcript with timestamps
   → LLM scoring with quote check → call detail with click-to-jump audio → PII redaction →
   flagged list + CSV export. Stretch: agent dashboard + coaching notes, transcript search,

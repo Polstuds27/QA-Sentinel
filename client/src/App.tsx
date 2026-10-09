@@ -12,12 +12,15 @@ import { Spinner } from "@/components/ui/spinner";
 import { AudioPlayer } from "@/components/audio-player";
 import { Logo } from "@/components/logo";
 import { Transcript } from "@/components/transcript";
+import { Devices } from "@/components/devices";
+import { PhoneUploads } from "@/components/phone-uploads";
+import { fetchRecordingAudio, getInfo, listAgents, listRecordings, setRecordingStatus, takeNextRecording, type Agent, type Recording, type ServerInfo } from "@/lib/server";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DEMO_CALLS, type DemoCall } from "./mock";
 import { isAIEnabled, runLocalPipeline, setAIEnabled, type PipelineProgress } from "./ai/pipeline";
 import { getBackend } from "./ai/backend";
 import { generateCoachingNote } from "./ai/coaching";
-import { BANK_SUPPORT_V2, scoreCall, type CallStatus, type Check } from "./lib/scorecard";
+import { BANK_SUPPORT_V2, STATUS_LABEL, scoreCall, type CallStatus, type Check } from "./lib/scorecard";
 import { redactPII } from "./lib/pii";
 import { deleteAICall, getCoaching, getScorecard, loadAICalls, loadOverrides, saveAICall, saveCoaching, saveScorecard, setOverride } from "./lib/store";
 import { downloadCSV, exportPDF } from "./lib/export";
@@ -61,7 +64,6 @@ function languageLabel(codes: string[]): string {
 
 const callName = (c: DemoCall) => c.name ?? `Call #${c.id}`;
 
-const STATUS_LABEL: Record<CallStatus, string> = { red: "Red", amber: "Amber", green: "Green" };
 
 // Call status is shown in its own colour (green, amber, red) and always with the word,
 // so it does not rely on colour alone.
@@ -101,12 +103,35 @@ export default function App() {
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [decisions, setDecisions] = useState<Record<string, "pass" | "fail">>({});
   const audioRef = useRef<HTMLAudioElement>(null);
+  const [phones, setPhones] = useState<{ online: boolean; info: ServerInfo | null; agents: Agent[]; recordings: Recording[] }>({ online: false, info: null, agents: [], recordings: [] });
+  const [phoneStage, setPhoneStage] = useState("");
+  const scoringPhone = useRef(false);
+  const scoringPhoneId = useRef<string | null>(null);
+  // The scorecard as it is now, for work that outlives one render (the phone queue).
+  const checksRef = useRef(checks);
+  useEffect(() => { checksRef.current = checks; }, [checks]);
 
   useEffect(() => {
     void loadAICalls().then(setAiCalls).catch(() => {});
     void getScorecard().then(setChecks).catch(() => {});
     void loadOverrides().then((saved) => setDecisions((d) => ({ ...saved, ...d }))).catch(() => {});
   }, []);
+
+  // Keep an eye on the upload server, and while Local AI is on, work through its queue.
+  useEffect(() => {
+    const tick = () => {
+      void refreshPhones();
+      // While a recording is being scored, keep telling the server so. If this tab is
+      // closed or reloaded mid-way, the server notices the silence and queues it again.
+      if (scoringPhoneId.current) void setRecordingStatus(scoringPhoneId.current, { status: "processing" }).catch(() => {});
+      if (aiOn) void scoreNextFromPhones();
+    };
+    tick();
+    const timer = setInterval(tick, 4000);
+    return () => clearInterval(timer);
+    // refreshPhones and scoreNextFromPhones read their state through refs and setters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiOn]);
 
   const calls: DemoCall[] = useMemo(
     () => [
@@ -166,35 +191,75 @@ export default function App() {
     setQueue((q) => q.map((item) => (item.id === id ? { ...item, status } : item)));
   }
 
+  // Transcribes, redacts and scores one recording and stores the result as a call.
+  async function scoreRecording(file: File, about: { name: string; agent: string; audio: string }, onStage: (p: PipelineProgress) => void): Promise<DemoCall> {
+    // A check that has no wording yet cannot be judged, so it is not sent to the model.
+    const out = await runLocalPipeline(file, checksRef.current.filter((c) => c.label.trim()), onStage);
+    const call: DemoCall = {
+      // Unique across reloads, so a new upload never overwrites a stored call.
+      id: `ai-${Date.now().toString(36)}${++queueSeq}`,
+      name: about.name,
+      audio: about.audio,
+      speakers: out.speakers,
+      languages: out.languages,
+      engine: out.engine,
+      redactions: out.redactions,
+      agent: about.agent,
+      duration: out.duration,
+      scorecard: "Bank Support v2",
+      lines: out.lines,
+      results: out.results,
+    };
+    await saveAICall(call, file);
+    setAiCalls((cs) => [call, ...cs.filter((c) => c.id !== call.id)]);
+    return call;
+  }
+
   async function runAI(item: QueueItem) {
     setAiError("");
     const onStage = (p: PipelineProgress) => patchQueue(item.id, `${p.stage}: ${p.detail}`);
     try {
       onStage({ stage: "decoding", detail: "starting" });
-      // A check that has no wording yet cannot be judged, so it is not sent to the model.
-      const out = await runLocalPipeline(item.file, checks.filter((c) => c.label.trim()), onStage);
-      const call: DemoCall = {
-        // Unique across reloads, so a new upload never overwrites a stored call.
-        id: `ai-${Date.now().toString(36)}${item.id}`,
-        name: item.name,
-        audio: item.url,
-        speakers: out.speakers,
-        languages: out.languages,
-        engine: out.engine,
-        redactions: out.redactions,
-        agent: "Uploaded call",
-        duration: out.duration,
-        scorecard: "Bank Support v2",
-        lines: out.lines,
-        results: out.results,
-      };
-      await saveAICall(call, item.file);
-      setAiCalls((cs) => [call, ...cs.filter((c) => c.id !== call.id)]);
+      const call = await scoreRecording(item.file, { name: item.name, agent: "Uploaded call", audio: item.url }, onStage);
       patchQueue(item.id, "done — open in Calls list below");
       setSelectedId(call.id);
     } catch (e) {
       patchQueue(item.id, "ready");
       setAiError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  // ---- recordings sent from phones (the upload server, ../server) ----
+  async function refreshPhones() {
+    try {
+      const [info, agents, recordings] = await Promise.all([getInfo(), listAgents(), listRecordings()]);
+      setPhones({ online: true, info, agents, recordings });
+    } catch {
+      setPhones((p) => (p.online ? { ...p, online: false } : p));
+    }
+  }
+
+  // The queue: one recording at a time, oldest first, however many phones are sending.
+  async function scoreNextFromPhones() {
+    if (scoringPhone.current) return;
+    scoringPhone.current = true;
+    let taken: Recording | null = null;
+    try {
+      taken = await takeNextRecording();
+      if (!taken) return;
+      scoringPhoneId.current = taken.id;
+      void refreshPhones();
+      const file = await fetchRecordingAudio(taken);
+      const call = await scoreRecording(file, { name: taken.name, agent: taken.agent, audio: URL.createObjectURL(file) }, (p) => setPhoneStage(`${p.stage}: ${p.detail}`));
+      const { score, status } = scoreCall(checksRef.current, call.results);
+      await setRecordingStatus(taken.id, { status: "scored", callId: call.id, score, callStatus: status });
+    } catch (e) {
+      if (taken) await setRecordingStatus(taken.id, { status: "failed", error: e instanceof Error ? e.message : String(e) }).catch(() => {});
+    } finally {
+      scoringPhone.current = false;
+      scoringPhoneId.current = null;
+      setPhoneStage("");
+      void refreshPhones();
     }
   }
 
@@ -409,19 +474,38 @@ export default function App() {
             </div>
           </section>
 
+          {phones.online && (phones.agents.length > 0 || phones.recordings.length > 0) && (
+            <section className={SECTION}>
+              <div className="flex flex-col gap-5 lg:col-span-5">
+                <h2 className={HEADING}>Sent from phones</h2>
+                <p className="max-w-[48ch] text-muted-foreground">Recordings agents send with the “Send to Linya” shortcut. They are scored one at a time while Local AI is on.</p>
+              </div>
+              <div className="lg:col-span-7">
+                <PhoneUploads
+                  recordings={phones.recordings}
+                  agents={phones.agents}
+                  stage={phoneStage}
+                  aiOn={aiOn}
+                  onOpen={(callId) => void openCall(callId)}
+                  onRetry={(r) => void setRecordingStatus(r.id, { status: "uploaded" }).then(refreshPhones)}
+                />
+              </div>
+            </section>
+          )}
+
           <section className={SECTION}>
             <div className="flex flex-col gap-6 lg:col-span-5">
               <h2 className={HEADING}>2 · Calls list</h2>
               <Field orientation="horizontal">
                 <Checkbox id="flagged-only" checked={flaggedOnly} onCheckedChange={(v) => setFlaggedOnly(v)} />
-                <FieldLabel htmlFor="flagged-only">Flagged (red) only</FieldLabel>
+                <FieldLabel htmlFor="flagged-only">Failed calls only</FieldLabel>
               </Field>
             </div>
             <div className="lg:col-span-7">
               {visible.length === 0 ? (
                 <Empty>
                   <EmptyHeader>
-                    <EmptyTitle>{calls.length === 0 ? "No calls yet" : "No red calls"}</EmptyTitle>
+                    <EmptyTitle>{calls.length === 0 ? "No calls yet" : "No failed calls"}</EmptyTitle>
                     <EmptyDescription>
                       {calls.length === 0
                         ? "Upload a recording above and press Transcribe & score. Untick Local AI to see the sample calls."
@@ -631,7 +715,16 @@ export default function App() {
                           </Field>
                           <Field orientation="horizontal" className="w-auto">
                             <FieldLabel htmlFor={`weight-${c.id}`}>Weight</FieldLabel>
-                            <Input id={`weight-${c.id}`} type="number" value={c.weight} min={0} max={100} onChange={(e) => patch({ weight: Number(e.target.value) })} className="w-20 tabular-nums" />
+                            <Input
+                              id={`weight-${c.id}`}
+                              // A plain box you type a number into: digits only, 0 to 100, no stepper arrows.
+                              type="text"
+                              inputMode="numeric"
+                              value={String(c.weight)}
+                              onChange={(e) => patch({ weight: Math.min(100, Number(e.target.value.replace(/\D/g, "")) || 0) })}
+                              onFocus={(e) => e.target.select()}
+                              className="w-20 tabular-nums"
+                            />
                           </Field>
                           <Field orientation="horizontal" className="w-auto">
                             <Checkbox id={`critical-${c.id}`} checked={c.critical} onCheckedChange={(v) => patch({ critical: v })} />
@@ -685,7 +778,17 @@ export default function App() {
           </div>
         </TabsContent>
 
-        <TabsContent value="agents" className={cn(PANEL, SECTION)}>
+        <TabsContent value="agents" className={cn(PANEL, "flex flex-col gap-24")}>
+          <section className={SECTION}>
+            <div className="flex flex-col gap-5 lg:col-span-5">
+              <h2 className={HEADING}>Agents and their phones</h2>
+              <p className="max-w-[48ch] text-muted-foreground">Add an agent to get their own upload link. They paste it once into the “Send to Linya” shortcut, and every recording they send arrives under their name.</p>
+            </div>
+            <div className="lg:col-span-7">
+              <Devices online={phones.online} info={phones.info} agents={phones.agents} onChange={() => void refreshPhones()} />
+            </div>
+          </section>
+          <section className={SECTION}>
           <div className="flex flex-col gap-5 lg:col-span-5">
             <h2 className={HEADING}>5 · Agent dashboard</h2>
             <p className="max-w-[48ch] text-muted-foreground">Averages and most-missed checks across all calls on this machine.</p>
@@ -715,7 +818,7 @@ export default function App() {
                     <li key={s.agent} className="flex flex-col gap-1 border-t border-border py-4">
                       <span>
                         <span className="font-medium">{s.agent}</span>
-                        <span className="text-muted-foreground"> · {s.calls} call(s) · avg {s.avg} · {s.reds} red</span>
+                        <span className="text-muted-foreground"> · {s.calls} call(s) · avg {s.avg} · {s.reds} failed</span>
                       </span>
                       {s.missed.length > 0 && (
                         <span className="label text-muted-foreground">
@@ -728,6 +831,7 @@ export default function App() {
               </>
             )}
           </div>
+          </section>
         </TabsContent>
 
         <TabsContent value="export" className={cn(PANEL, SECTION)}>

@@ -35,6 +35,9 @@ export const BANK_SUPPORT_V2: Check[] = [
 
 export type CallStatus = "green" | "amber" | "red";
 
+/** What each status is called on screen and in exports. The colour carries the same meaning. */
+export const STATUS_LABEL: Record<CallStatus, string> = { green: "Passed", amber: "Needs review", red: "Failed" };
+
 export function scoreCall(checks: Check[], results: CheckResult[]): { score: number; status: CallStatus } {
   const byId = new Map(results.map((r) => [r.check_id, r]));
   let earned = 0;

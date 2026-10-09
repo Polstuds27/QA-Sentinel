@@ -1,0 +1,14 @@
+{
+  "name": "linya-upload-server",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Receives call recordings from agents' phones on the local network and queues them for the Linya app to score.",
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "multer": "^2.0.2"
+  }
+}

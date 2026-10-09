@@ -2,7 +2,7 @@
 // Card numbers, emails and PH mobiles are always redacted — never export raw PII.
 import { jsPDF } from "jspdf";
 import type { DemoCall } from "../mock";
-import { scoreCall, type Check } from "./scorecard";
+import { STATUS_LABEL, scoreCall, type Check } from "./scorecard";
 import { redactPII } from "./pii";
 
 export function callToCSV(call: DemoCall): string {
@@ -41,7 +41,7 @@ export function exportPDF(call: DemoCall, checks: Check[]): void {
   doc.setFontSize(11);
   doc.text(`Agent: ${call.agent}  Duration: ${call.duration}  Scorecard: ${call.scorecard}`, 14, y);
   y += 7;
-  doc.text(`Score: ${score} / 100  Status: ${status.toUpperCase()}`, 14, y);
+  doc.text(`Score: ${score} / 100  Status: ${STATUS_LABEL[status]}`, 14, y);
   y += 10;
   doc.setFontSize(12);
   doc.text("Scorecard", 14, y);

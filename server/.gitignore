@@ -1,0 +1,3 @@
+node_modules
+# Recordings and agent tokens: never commit
+data

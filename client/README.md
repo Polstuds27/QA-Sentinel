@@ -25,6 +25,7 @@ npm run dev     # toggle Local AI on in the header (needs ollama serve below)
 npm run build   # tsc + vite build
 npm run lint    # oxlint
 npm run whisper # optional, macOS: native Whisper large-v3-turbo (faster and more accurate)
+npm run server  # optional: lets agents send recordings from their iPhones (see ../docs/PHONE_UPLOADS.md)
 node scripts/phase1-e2e.mjs  # full upload→transcribe→score browser test
 npm run eval    # checks the scoring prompt against 18 scripted calls (needs ollama)
 ```

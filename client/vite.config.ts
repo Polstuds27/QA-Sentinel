@@ -5,6 +5,7 @@ import react from '@vitejs/plugin-react'
 import { defineConfig, type Connect, type Plugin } from 'vite'
 
 const publicDir = fileURLToPath(new URL('./public', import.meta.url))
+const uploadServer = process.env.LINYA_SERVER ?? 'http://localhost:8787'
 
 // The speech library probes for optional model files. Vite answers an unknown path with
 // index.html, which the library then tries to read as a model config and fails. A model
@@ -32,4 +33,8 @@ export default defineConfig({
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
+  // The upload server (../server, `npm run server`) answers under /api. Going through this
+  // proxy keeps the app on one origin; phones talk to the server's own port directly.
+  server: { proxy: { '/api': uploadServer } },
+  preview: { proxy: { '/api': uploadServer } },
 })

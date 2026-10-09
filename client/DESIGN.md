@@ -151,7 +151,7 @@ The spec scores calls green (85 and up), amber (70 to 84) and red (below 70, or 
 | Amber | `--status-amber` | `#a15c00` | `#f0a13a` |
 | Red | `--destructive` | `#b3261e` | `#ff8a80` |
 
-The status word is always written next to the score ("71 / 100 · Amber"), so the meaning never rests on colour alone. Badges are outlined, not filled. These colours are for call status only. Check verdicts stay as they were: an icon and a word (Pass, Fail, Critical, N/A), with only Fail and Critical in the destructive colour.
+The badge says what the status means, not the name of its colour: green is "Passed", amber is "Needs review", red is "Failed" (`STATUS_LABEL` in `lib/scorecard.ts`). That word is always written next to the score ("71 / 100 · Needs review"), so the meaning never rests on colour alone. Badges are outlined, not filled. These colours are for call status only. Check verdicts stay as they were: an icon and a word (Pass, Fail, Critical, N/A), with only Fail and Critical in the destructive colour.
 
 ### Named Rules
 
