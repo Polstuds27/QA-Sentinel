@@ -70,3 +70,5 @@ test, wavesurfer waveform, WebLLM revisit on stronger hardware.
   run git/commands at Desktop level. `QA Sentinel/` is its own git repo; run git here.
 - `shell` is PowerShell: no Unix-isms (`head` fails), chain with `;`, quote spaced paths.
   Prefer `read`/`glob`/`grep` over `cat`/`sed`/`find`/`ls`.
+- Keep `.ps1` files ASCII-only: PS 5.1 misreads BOM-less UTF-8, and em-dash bytes
+  decode as a quote character that breaks parsing (measured on `setup-local.ps1`).
