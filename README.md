@@ -79,6 +79,10 @@ Setup only: `npm install`, `npm run models` (speech models, about 340 MB),
 `ollama pull qwen2.5:3b` (about 2 GB) and, on macOS, the first `npm run whisper`
 (1.6 GB). Running the app needs none.
 
+One optional feature uses the internet when it is turned on: a Cloudflare Tunnel that
+lets a phone outside the office Wi-Fi send recordings to the laptop. It is off by
+default. See "APIs and cloud services" below.
+
 ## Screenshots
 
 The screens in the order an analyst uses them. The calls shown are recordings we ran through the app while testing, including ones sent from our own phones; those audio files are not in the repo.
@@ -152,9 +156,22 @@ and the evidence line, and rejects a quote that is not in the transcript.
 
 ### APIs and cloud services
 
-None. The app talks only to `localhost`: Ollama on 11434, whisper.cpp on 8178 and its own
-server on 8787. Phone uploads use an Apple Shortcut that posts to the laptop over the
-same Wi-Fi.
+None are needed. The app talks only to `localhost`: Ollama on 11434, whisper.cpp on 8178
+and its own server on 8787. Phone uploads use an Apple Shortcut that posts to the laptop
+over the same Wi-Fi.
+
+One optional cloud service: **Cloudflare Tunnel** (`cloudflared`, a free quick tunnel), for
+agents whose phones cannot join the laptop's Wi-Fi. It is off unless the QA lead starts
+it and saves its address on the Agents tab.
+
+- With the tunnel on, a recording travels from the phone through Cloudflare's servers to
+  the laptop. The app says so on that screen. Transcription and scoring still run only on
+  the laptop; no AI runs in the cloud.
+- Only the upload route is reachable through the tunnel. Stored calls, the agent list and
+  settings answer only to the laptop itself. Checked on Oct 10, 2026: through the tunnel
+  those routes returned "Only available on the Linewise laptop itself".
+- To start it: `brew install cloudflared`, then
+  `cloudflared tunnel --url http://localhost:8787`. Steps are in `docs/PHONE_UPLOADS.md`.
 
 ### AI development tools
 
@@ -266,8 +283,9 @@ has regressed. It is not an accuracy rate for real calls, and we do not claim on
   accuracy on real calls.
 - Rules you write yourself in the scorecard editor are judged with one general question
   each, which is cruder than the seven built-in rules.
-- Phone uploads stay private only on the same Wi-Fi or a hotspot. A public tunnel would
-  route the audio through that tunnel company's servers.
+- Phone uploads stay on your own network only on the same Wi-Fi or a hotspot. With the
+  optional Cloudflare Tunnel on, the audio passes through Cloudflare's servers on the way
+  to the laptop.
 - The native Whisper path is macOS only. Elsewhere the smaller Whisper base runs in the
   browser and makes more transcription mistakes.
 
