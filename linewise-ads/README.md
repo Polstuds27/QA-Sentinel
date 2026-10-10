@@ -1,6 +1,6 @@
 # Linewise ad
 
-A 1-minute promo video for Linewise (the folder keeps the product's earlier name), built with [Remotion](https://www.remotion.dev).
+A 1-minute promo video for Linewise, built with [Remotion](https://www.remotion.dev).
 1920x1080, 60 fps, 60 seconds. Composition id: `LinyaAd`.
 
 The middle of the video is the real app, recorded from the browser: one run of the
@@ -14,7 +14,7 @@ numbers on screen are the ones the app displayed for that call.
 ```sh
 npm install
 npm run dev        # preview in Remotion Studio
-npm run render     # writes out/linya-ad.mp4 (h264, 60 fps)
+npm run render     # writes out/linewise-ads.mp4 (h264, 60 fps)
 npm run lint
 npm run audio      # regenerates the music and sound effects in public/audio/
 npm run record     # records the app again into public/demo/ (see below)

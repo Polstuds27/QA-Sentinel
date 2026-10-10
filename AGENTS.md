@@ -3,7 +3,7 @@
 Linewise is the product's name. It was QA Sentinel until Oct 9, 2026, then Linya until
 Oct 10 (old database and model folders are renamed automatically on start). The concept PDF, the
 repo folder, the GitHub repo and some internal keys (`qa-sentinel` IndexedDB name)
-still use the old name; use Linewise everywhere new. The promo video project is still the folder `linya-ads/`.
+still use the old name; use Linewise everywhere new. The promo video project is the folder `linewise-ads/` (renamed from `linya-ads/` on Oct 10; its composition id is still `LinyaAd`).
 
 Local-AI call-center QA (AppBuildersPH Hackathon 2026, Local AI track): batch-upload
 call recordings, transcribe + score + flag every call on-device, export redacted reports.
@@ -57,17 +57,17 @@ Submission due 10:00 AM Oct 10 — working product over slides.
 - `client/samples/call-*.m4a` — three scripted test recordings to upload and score, built
   by `client/scripts/make_sample_calls.py` (macOS `say` voices; stereo, agent left,
   customer right). They are not part of the app and are not served by it. Synthetic voices
-  on scripted calls: test input, never a benchmark. `call-147.m4a` is the spec's scenario
+  on scripted calls: test input, never an accuracy benchmark. `call-147.m4a` is the spec's scenario
   (card read back, no identity check) and should score 62 with the preset scorecard.
 - `client/scripts/` — `phase1-e2e.mjs` (full
   upload→transcribe→score browser test; it finds elements by `data-testid` and by the
   header text "Local AI ready (Whisper + Ollama 3B)", so keep those when restyling;
-  `linya-ads/scripts/record-demo.mjs` waits for the same text). Its default clip is
-  `client/samples/call-sample.wav` (a 67 s mono text-to-speech call). The Phase 0 model
-  experiments (`phase0-*.mjs`, `phase0.html`) and the `@mlc-ai/web-llm` and
-  `wavesurfer.js` packages were removed on Oct 10; they are in git history.
-- `docs/LOCAL_AI_PLAN.md` — phased local AI/backend plan. `docs/BACKEND_CAPSULE.md` —
-  backend notes.
+  `linewise-ads/scripts/record-demo.mjs` waits for the same text). Its default clip is
+  `client/samples/call-sample.wav` (a 67 s mono text-to-speech call).
+  `benchmark.mjs` (`npm run benchmark`) times upload to scored call for the three sample
+  recordings with each speech engine, on its own copy of the app with empty storage.
+- `docs/LOCAL_AI_PLAN.md` — what the local AI pipeline is and how each stage was built.
+  `docs/BACKEND_CAPSULE.md` — how to set up, run, test and extend the local backend.
 - `server/` — Linewise's server (Node, Express, `npm run server` from `client/`, port 8787).
   Two jobs. (1) Storage: one SQLite database, `server/data/linewise.db`, through Node's
   built-in `node:sqlite` (no install). Tables in `server/db.mjs`: `agents`, `uploads`
@@ -84,7 +84,7 @@ Submission due 10:00 AM Oct 10 — working product over slides.
   leaves the browser copy in place. UI for phones: `devices.tsx` (Agents tab),
   `phone-uploads.tsx` (Calls tab), `lib/server.ts`. Guide, shortcut steps, curl and test
   checklist: `docs/PHONE_UPLOADS.md`. The shortcut works on two real iPhones (Oct 10).
-- `linya-ads/` — Remotion project for the promo video. Separate package, not part of the app.
+- `linewise-ads/` — Remotion project for the promo video. Separate package, not part of the app.
 - Local backend only: Ollama on localhost (qwen2.5:3b) + IndexedDB in the browser.
   No hosted servers, no cloud APIs — audio never leaves the machine.
   `recharts` wired (dashboard).
@@ -105,6 +105,7 @@ npm run server                             # the server: SQLite storage and uplo
 node scripts/phase1-e2e.mjs                # whole-piece E2E (needs dev + ollama up)
 npm run eval                               # scoring regression check (needs ollama up)
 npm run eval:redaction                     # redaction regression check (needs ollama up)
+npm run benchmark                          # times the three sample calls end to end (needs ollama up)
 ```
 
 `phase1-e2e.mjs` has a Windows Chrome path and profile directory hard-coded; change them
@@ -187,8 +188,8 @@ Its navy/teal mockups are superseded by `client/DESIGN.md`; everything else stan
   answers, stored on the call as `redactions`. The model only returns short strings; code
   accepts one only if it is literally in the transcript and is not the agent's name, and
   does the replacing itself. The agent's name and the company name stay visible.
-  `npm run eval:redaction` checks eight scripted calls (22 details hidden of 22, 17 of 17
-  kept, Oct 9). Scripted English; real names and addresses will slip through sometimes.
+  `npm run eval:redaction` checks nine scripted calls (33 details hidden of 33, 24 of 24
+  kept, Oct 10). Scripted English; real names and addresses will slip through sometimes.
 - Prompts live in three files: `ai/ollama.ts` (scoring: `SYSTEM`, the per-check `PLANS`,
   `customPlan`), `ai/redaction.ts` (`SYSTEM`), `ai/coaching.ts` (the coaching note). Exports must
   stay redacted (`[CARD •••• 1111]`, `[EMAIL]`, `[PHONE]`). A card number spoken by the
@@ -204,15 +205,15 @@ Its navy/teal mockups are superseded by `client/DESIGN.md`; everything else stan
   scorecard builder UI, PDF export, analyst confirm/dismiss, Ollama switch. Most of the
   stretch list is already built (see below); transcript search is not.
 
-## AI/backend plan — Phase 1–5 DONE (adapted), rest gated
+## AI pipeline: what is built
 
 Shipped as working pieces: Whisper worker → PII engine → Ollama 3B scoring →
 quote guard → deterministic critical override; provider
-abstraction (`backend.ts`); Dexie v2 persistence (calls, results, overrides,
-scorecards, coaching); redacted CSV + PDF export; coaching notes; agent dashboard.
+abstraction (`backend.ts`); persistence (SQLite through the server, or Dexie v3 in the
+browser: calls, results, overrides, scorecards, coaching); redacted PDF export; coaching
+notes; agent dashboard.
 E2E proven (`phase1-e2e.mjs`): real 67 s clip transcribed and scored, card-readback
-flagged CRIT. Phase 0 ledger: Whisper PASS; WebLLM BLOCKED on Intel iGPU; Ollama 1.5B
-fast but wrong on criticals; Ollama 3B correct (~26 s cold). On the Mac (Oct 9), real
+flagged CRIT. On the Mac (Oct 9), real
 pipeline ran end to end in the browser on the M4 Pro Mac with `samples/call-147.m4a`:
 about 22 s to transcribe both channels, about 6 s to score all 7 checks, result 62/100 RED
 with both critical flags, the same as the spec scenario.
@@ -232,19 +233,23 @@ held-out set; the probe design scored 41/42 (98%) on six transcripts written aft
 prompt was frozen. That one miss led to a keyword backstop for identity questions, after
 which all 126 verdicts matched over two runs, but those sets are no longer unseen. These
 are scripted English transcripts, not real calls: never quote them as product accuracy.
-Change the prompt only with this script, and add new cases instead of fitting to old ones. Still TODO (gated):
-a full Wi-Fi-off rehearsal on the demo laptop, WebLLM revisit on stronger hardware. That E2E run was before the Gallery White
-restyle was merged in; re-run it once on the merged UI.
+Change the prompt only with this script, and add new cases instead of fitting to old ones.
+Re-run Oct 10 on the Mac: 126 of 126 verdicts as expected in 72 s, and
+`npm run eval:redaction` hid 33 of 33 details and kept 24 of 24 across nine scripted calls.
+Still TODO: a full Wi-Fi-off rehearsal on the demo laptop.
 
-The spec's original plan was WebLLM in the browser (Qwen2.5-3B-Instruct or
-Llama-3.2-3B-Instruct, 1.5B fallback) with Ollama as the optional switch. Ollama is the
-working backend because WebLLM is blocked on the test hardware.
+Ollama on localhost (qwen2.5:3b) is the scoring backend.
+
+Tested hardware and measured timings are in the root README ("Tested hardware",
+"Benchmark"). Re-measure with `npm run benchmark` before changing those numbers, and say
+what machine they came from.
 
 ## Submission (10:00 AM Oct 10, one submission, no extensions)
 
 - Public GitHub repo by the deadline; judges review it as of then.
 - README with setup steps for judges and the disclosures: `README.md` at the repo root
-  (problem, description, models, tools, assets, how to run, limits). `client/README.md`
+  (problem, description, screenshots, models, tools, assets, how to run, tested hardware,
+  benchmark, limits). `client/README.md`
   is developer notes and points to it; keep the disclosures in the root one only.
 - About 1 minute of demo video, and an X / LinkedIn post tagging Devin / Cognition with
   #AppBuildersPH.

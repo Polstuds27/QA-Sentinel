@@ -12,6 +12,7 @@
     "eval": "node scripts/eval-scoring.mjs",
     "whisper": "node scripts/native-whisper.mjs",
     "eval:redaction": "node scripts/eval-redaction.mjs",
+    "benchmark": "node scripts/benchmark.mjs",
     "server": "npm --prefix ../server start"
   },
   "dependencies": {

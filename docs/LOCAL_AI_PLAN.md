@@ -1,93 +1,70 @@
-# QA Sentinel — local AI/backend plan (NOT started)
+# Linewise — the local AI pipeline, stage by stage
 
-Staged plan for implementing the on-device pipeline after the frontend UI shell.
-Do not install model deps, download weights, or spawn workers until this plan is approved.
-Spec refs: pipeline §06, stack §10, build order §12. Hard rule: no cloud AI APIs, ever.
+What each stage of the on-device pipeline does and where it lives. Every stage is built
+and in use. Hard rule throughout: no cloud AI APIs, and audio never leaves the machine.
 
-## Phase 0 — de-risk on the demo laptop (first, before any app code)
+For setup, contracts and tests see `BACKEND_CAPSULE.md`. For measured timings and the
+machines they came from see the root `README.md`.
 
-- Confirm Chrome/Edge WebGPU works; note GPU RAM (≈4 GB for 3B, less for 1.5B).
-- Whisper base ONNX transcribes a ~1-min sample clip locally; WebLLM returns one valid
-  JSON verdict against `BANK_SUPPORT_V2`.
-- Done when: both run on the exact demo laptop. If slow/failing: drop to whisper-base +
-  Qwen2.5-1.5B, or switch LLM to Ollama on localhost.
+## 1. Speech-to-text
 
-### Measured on this laptop (Oct 9, 2026)
+- Web Audio decodes an upload and resamples it to 16 kHz, keeping the two channels apart.
+- Two engines, picked per call and recorded on it:
+  - Whisper large-v3-turbo through whisper.cpp on `localhost:8178` (`npm run whisper`,
+    macOS), used whenever it is running.
+  - Whisper base (ONNX, Transformers.js) inside a Web Worker, so the interface never
+    blocks. Used when the native service is not running.
+- Both return a time for every word. The language is detected per call.
+- Code: `src/ai/whisper.ts`, `src/ai/speech.worker.ts`, `src/ai/native-whisper.ts`,
+  `src/ai/models.ts`.
 
-| Check | Result |
-|---|---|
-| GPUs | Intel UHD 620 (1 GB, Chrome default adapter) + NVIDIA MX150 (2 GB). Below 4 GB spec. |
-| Browsers | Chrome 151, Edge 154 — WebGPU API present |
-| RAM / disk | 16 GB RAM, 68 GB free — fine |
-| A: Whisper base | PASS — 67.5 s local TTS clip (now `samples/call-sample.wav`) transcribed in 19.0 s CPU (~0.28× realtime), 5/6 keywords hit. (The `phase0-*` scripts were removed on Oct 10; they are in git history.) |
-| B: WebLLM 1.5B | BLOCKED — model downloads + caches fine, but Intel iGPU hangs at init (`DXGI_ERROR_DEVICE_HUNG`, device removed). Chrome on Windows ignores `powerPreference`, so MX150 can't be forced from the page. 0.5B hangs identically; SwiftShader exposes no adapter. `phase0.html` + `scripts/phase0-webllm-browser.mjs` |
-| C: Ollama qwen2.5:1.5b (CPU) | PARTIAL — server up, valid JSON, exact evidence quotes, quote-guard PASS, ~6 s/check steady-state (52 s cold). But verdict wrong on `no_card_readback` (says pass 3× despite digit-count rule + PII fact). Critical checks must be decided by the deterministic PII engine (per spec §06), LLM handles soft checks. `scripts/phase0-ollama.mjs` |
-| D: Ollama qwen2.5:3b (CPU) | PASS — correct `fail` + exact quote + `02:13` + sensible reason, 26.4 s cold (steady-state faster). Locked architecture: 3B judges all checks, deterministic PII engine double-decides criticals (instant, reliable). Pre-process demo calls; live-score at most one short call on stage. |
-| B fallbacks (untested) | Qwen2.5-0.5B (fits iGPU?) · SwiftShader CPU-WebGPU (slow but functional) · Ollama on CPU (16 GB RAM, same prompts via `OLLAMA_ORIGINS`) |
+## 2. Speakers
 
-## Phase 1 — speech worker
+- Stereo recordings: the channels are mixed and transcribed once, and each phrase goes to
+  the channel that is louder while it is said. Left is the agent, right is the customer.
+- Mono recordings: pyannote segmentation 3.0 marks who speaks when, each word goes to the
+  voice speaking at that moment, and the voice that talks like an agent is labelled Agent.
+- A file with the same audio on both channels is treated as mono.
+- Code: `assignChannels`, `assignVoices`, `wordsToLines` in `src/ai/whisper.ts`; the
+  agent/customer decision in `src/ai/pipeline.ts`.
 
-- `Transformers.js` Whisper (base → small) ONNX, WebGPU with WASM fallback, inside a Web Worker.
-- Web Audio API decodes + resamples uploads to 16 kHz mono; stereo calls transcribe per
-  channel (agent/customer), mono falls back to LLM turn-labelling.
-- Returns `TranscriptChunk[]` (`client/src/ai/types.ts`); UI stays on mock until worker
-  passes its acceptance clip.
+## 3. Redaction and the quote check
 
-DONE (shipped as Phase 1+2 piece): `src/ai/whisper.ts` + `src/ai/speech.worker.ts` —
-Whisper base in a Web Worker (WASM path, UI never blocks). Stereo transcribed per channel
-(Agent = ch0, Customer = ch1); mono labelled Unknown. E2E: 67 s clip in ~40 s headless.
+- Patterns in `src/lib/pii.ts` hide card numbers, emails, phone numbers, dates of birth,
+  account IDs, other long numbers, spelled-out words and addresses, with no model involved.
+- qwen2.5:3b finds names, addresses and security answers (`src/ai/redaction.ts`). It only
+  returns short strings; code accepts one only if it is literally in the transcript, and
+  does the replacing itself.
+- Quote check (`quoteExists` in `src/ai/pipeline.ts`): a verdict that claims something was
+  said must come with a quote that is in the transcript. Otherwise the rule is asked once
+  more, then left for manual review.
+- A card-length number on an agent line is both hidden and a compliance failure, decided
+  by code.
 
-## Phase 2 — PII + quote-check guard (deterministic first)
+## 4. Scoring
 
-- Keep `lib/pii.ts` regex + Luhn as the base layer (cards, PH mobiles, emails, account IDs).
-- Add LLM pass for names/addresses only; every hit becomes a redaction span, and an
-  agent-spoken card number becomes a critical flag.
-- Quote-check guard: reject any verdict whose evidence quote is not found verbatim in the
-  transcript; re-run or mark for manual review.
+- qwen2.5:3b through Ollama on `localhost:11434` (`src/ai/ollama.ts`).
+- The model answers yes/no questions about only the lines that can answer them; code turns
+  the answers into Pass, Fail or N/A, a reason and an evidence line.
+- Model choice was measured, not guessed: the 3B size judged the critical rules correctly
+  where the 1.5B size did not, so 3B is the one used.
+- Coaching notes come from the same model (`src/ai/coaching.ts`).
+- A call that is not in English is scored by an analyst in the app, not by the model.
 
-DONE (shipped as Phase 1+2 piece): `findCardHits()` in `lib/pii.ts`; two-tier guard in
-`pipeline.ts` (normalized substring, then ≥80% ordered-word fuzzy — Whisper spells
-"BankCo" as "bank code"); agent-spoken card digits force `no_card_readback` fail.
-LLM name/address pass still TODO.
+## 5. Storage and offline
 
-## Phase 3 — scoring worker
+- With the server running, calls live in one SQLite file and recordings beside it
+  (`server/`). Without it, the app stores everything in the browser with Dexie
+  (`src/lib/db.ts`, `src/lib/store.local.ts`). `src/lib/store.ts` picks.
+- `npm run models` puts the speech models and the ONNX runtime in `client/public/`, and
+  remote model loading is switched off, so after setup the app makes no request to any
+  other machine.
+- The redacted PDF report is built in the browser (`src/lib/export.ts`).
 
-- WebLLM Qwen2.5-3B-Instruct or Llama-3.2-3B-Instruct (q4); 1.5B fallback. JSON-mode output
-  matching `CheckResult` (`check_id`, `verdict`, `severity`, `speaker`, `timestamp`,
-  `evidence`, `reason`); one call per scorecard check; analyst confirms/dismisses flags.
-- Coaching notes generated from the same transcript, quoted.
+## 6. Checks
 
-DONE via Ollama instead of WebLLM (this laptop's iGPU hangs — see Phase 0 table):
-`src/ai/ollama.ts` scores all 7 checks with qwen2.5:3b through `localhost:11434`
-(`OLLAMA_ORIGINS` set for the browser). E2E verdicts: greeting PASS, empathy PASS,
-card-readback CRIT, refund FAIL — analyst confirms/dismisses in the UI as designed.
-Coaching notes still TODO.
-
-## Phase 4 — offline + persistence
-
-- Cache Storage pins app + model weights on first load; full flow tested with Wi-Fi off.
-- Dexie `qa-sentinel` stores calls, transcripts, scorecards, results (`lib/db.ts` — wire it here).
-- Redacted CSV first, jsPDF report second; wavesurfer.js waveform with click-to-seek.
-
-DONE (v2 schema: calls, transcripts, results, overrides, scorecards): AI calls persist
-and reload on startup (`lib/store.ts`); analyst confirm/dismiss writes overrides;
-scorecard edits persist; redacted CSV + jsPDF PDF per call (`lib/export.ts`).
-Offline-tested: `PHASE1_OFFLINE=1 phase1-e2e` transcribes fully offline (model cache
-holds), scoring resumes on localhost. Full airplane-mode rehearsal still due on the
-demo laptop. Still TODO: wavesurfer waveform.
-
-## Phase 5 — Ollama switch (optional backend)
-
-- Same prompts over `http://localhost:11434`; set `OLLAMA_ORIGINS` so the browser can call it.
-- This is the only "backend": localhost LLM, no audio upload, no hosted services.
-
-DONE as the primary backend (not optional on this hardware): `src/ai/backend.ts`
-(Ollama only; the WebLLM stub was removed on Oct 10); `OLLAMA_ORIGINS` set for
-`http://localhost:5173`; qwen2.5:3b pulled. Coaching notes via the same model
-(`src/ai/coaching.ts`); per-agent stats (`src/lib/agents.ts`) feed the dashboard.
-
-## Interfaces (already stubbed)
-
-- `client/src/ai/types.ts` — `TranscriptChunk`.
-- `client/src/ai/pipeline.ts` — `AI_ENABLED = false`; `runLocalPipeline()` throws until
-  approved. Flip the flag only when Phase 0 passes on the demo laptop.
+- `npm run eval`: scripted transcripts with expected verdicts. Run it before and after any
+  prompt change, and add new cases instead of fitting to old ones.
+- `npm run eval:redaction`: scripted calls with details that must be hidden and details
+  that must stay.
+- `npm run benchmark`: times the sample recordings end to end on the current machine.

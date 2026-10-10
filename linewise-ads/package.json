@@ -1,5 +1,5 @@
 {
-  "name": "linya-ads",
+  "name": "linewise-ads",
   "version": "1.0.0",
   "description": "1-minute promo video for Linewise",
   "repository": {},
@@ -26,7 +26,7 @@
   },
   "scripts": {
     "dev": "remotion studio",
-    "render": "remotion render LinyaAd out/linya-ad.mp4 --codec=h264",
+    "render": "remotion render LinyaAd out/linewise-ads.mp4 --codec=h264",
     "record": "node scripts/record-demo.mjs",
     "transcribe": "node scripts/transcribe.mjs",
     "audio": "node scripts/make-audio.mjs",
